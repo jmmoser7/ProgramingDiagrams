@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pack board</title>
+  <link rel="icon" href="data:,">
+  <style>
+    @font-face {
+      font-family: 'PB Replica';
+      font-weight: 400;
+      src: local('ReplicaStd-Regular'), local('Replica Std Regular'), local('ReplicaStd Regular');
+    }
+    :root {
+      --panel: #ffffff;
+      --ink: #1b1e22;
+      --sub: #8a9098;
+      --border: #e1e4e8;
+      --border-strong: #cdd2d8;
+      --accent: #2fd3c0;
+      --on-accent: #0e1013;
+      --focus: #0f8f82;
+      --hover: rgba(27, 30, 34, 0.05);
+      --press: rgba(27, 30, 34, 0.09);
+      --h: 24px;
+      --r: 12px;
+      --pill: 18px;
+      --gap: 4px;
+      --shadow: 0 1px 2px rgba(20, 24, 28, 0.05), 0 2px 10px rgba(20, 24, 28, 0.06);
+      --font: 'Replica Std', 'Replica', 'ReplicaStd', 'PB Replica', 'Segoe UI', sans-serif;
+    }
+    [hidden] { display: none !important; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #e7eaee;
+    }
+    body {
+      font: 12px/1 var(--font);
+      color: var(--ink);
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, a.btn {
+      font: inherit;
+      color: inherit;
+      background: none;
+      border: 0;
+      margin: 0;
+      padding: 0;
+      cursor: pointer;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+    button:disabled { color: var(--sub); opacity: 0.45; cursor: default; }
+    input { font: inherit; color: inherit; margin: 0; user-select: text; }
+    #board {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+    .cap {
+      height: var(--h);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background-color: var(--panel);
+      box-shadow: var(--shadow);
+      color: var(--ink);
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      flex: none;
+      padding: 0 12px;
+      white-space: nowrap;
+    }
+    .sub { color: var(--sub); }
+    .btn, .seg {
+      height: var(--pill);
+      padding: 0 10px;
+      border-radius: calc(var(--pill) / 2);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:hover:not(:disabled), .seg:hover { background: var(--hover); }
+    .btn:active:not(:disabled), .seg:active { background: var(--press); }
+    .segs {
+      display: inline-flex;
+      align-items: center;
+      height: calc(var(--pill) + 2px);
+      padding: 1px;
+      border: 1px solid var(--border);
+      border-radius: calc(var(--pill) / 2 + 1px);
+    }
+    .seg { height: calc(var(--pill) - 2px); color: var(--sub); }
+    .seg:hover { color: var(--ink); }
+    .seg.on, .seg.on:hover { background: var(--accent); color: var(--on-accent); }
+    .round {
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: var(--pill);
+      height: var(--pill);
+      border-radius: 50%;
+      color: var(--sub);
+    }
+    .round:hover { background: var(--hover); color: var(--ink); }
+    .round svg, .btn svg { display: block; }
+    .divider { flex: none; width: 1px; height: 14px; margin: 0 4px; background: var(--border); }
+    .stack {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+    }
+    #menu { z-index: 30; width: max-content; max-width: 280px; }
+    .item { width: 100%; justify-content: space-between; text-align: left; gap: 16px; }
+    .item:hover { background-image: linear-gradient(var(--hover), var(--hover)); }
+    .item:active { background-image: linear-gradient(var(--press), var(--press)); }
+    .item.on { box-shadow: inset 2px 0 0 var(--focus), var(--shadow); }
+    .item.danger:hover { color: #9b1c1c; }
+    .hint { color: var(--sub); font-size: 11px; margin-left: 12px; }
+    .bar, .pop {
+      position: fixed;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 0 3px;
+    }
+    .bar {
+      left: 50%;
+      bottom: 16px;
+      z-index: 10;
+      transform: translateX(-50%);
+    }
+    .bar .btn { padding: 0 11px; }
+    #blister {
+      position: fixed;
+      left: 50%;
+      bottom: 12px;
+      z-index: 10;
+      width: 56px;
+      height: 20px;
+      transform: translateX(-50%);
+      display: grid;
+      place-items: center;
+      background: none;
+      border: 0;
+    }
+    #blister::before {
+      content: '';
+      width: 40px;
+      height: 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: 4px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    #blister:hover::before { width: 48px; height: 10px; }
+    .pop { z-index: 25; }
+    #src {
+      position: fixed;
+      left: 16px;
+      bottom: 48px;
+      z-index: 10;
+      gap: 2px;
+      max-width: calc(100vw - 32px);
+      padding: 0 3px;
+    }
+    #src .file { min-width: 0; max-width: 220px; padding: 0 8px; }
+    #src .file span { overflow: hidden; text-overflow: ellipsis; }
+    #src .file svg { flex: none; color: var(--sub); }
+    #status {
+      padding: 0 6px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-variant-numeric: tabular-nums;
+    }
+    #src.drop { border-color: var(--focus); box-shadow: 0 0 0 3px rgba(47, 211, 192, 0.22); }
+    #legend { left: 16px; top: 16px; max-height: calc(100vh - 120px); overflow: auto; scrollbar-width: none; }
+    #legend::-webkit-scrollbar { display: none; }
+    #legend .item { width: auto; }
+    .swatch {
+      flex: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid rgba(27, 30, 34, 0.16);
+    }
+    #data { top: 16px; right: 16px; left: auto; }
+    .field { width: 280px; }
+    .field .k { flex: 0 0 92px; color: var(--sub); }
+    .field input {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 18px;
+      padding: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+    }
+    .field input:focus { box-shadow: inset 0 -1px 0 var(--focus); }
+    #empty {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 380px;
+      height: 196px;
+      padding: 20px 24px;
+      border: 1.5px dashed var(--border-strong);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      transform: translate(-50%, -50%);
+    }
+    #empty.drop { border-color: var(--focus); background: #f1fcfa; }
+    #empty .drop-title { font-size: 14px; }
+    #empty .drop-sub { color: var(--sub); font-size: 11px; text-align: center; line-height: 1.35; }
+    #empty .btn { margin-top: 6px; border: 1px solid var(--border); }
+    #toast {
+      position: fixed;
+      left: 50%;
+      bottom: 64px;
+      z-index: 40;
+      transform: translateX(-50%);
+      height: auto;
+      padding: 8px 14px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+    }
+    .name-input {
+      position: fixed;
+      z-index: 18;
+      margin: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      box-shadow: 0 0 0 1px rgba(15, 143, 130, 0.55);
+      font-family: var(--font);
+      text-align: left;
+      user-select: text;
+    }
+    #dim-input, #aspect-input {
+      width: 72px;
+      height: 16px;
+      margin-left: 8px;
+      padding: 0 6px;
+      border: 0;
+      border-radius: 8px;
+      outline: none;
+      background: transparent;
+      box-shadow: inset 0 -1px 0 var(--focus);
+    }
+    #dim-input.bad, #aspect-input.bad { box-shadow: inset 0 -1px 0 #c0392b; color: #c0392b; }
+    .lock { color: var(--focus); }
+    #toolbar { width: max-content; max-width: calc(100vw - 16px); height: auto; min-height: 24px; flex-wrap: wrap; justify-content: center; }
+
+    /* The original board's capsule and dropdown treatment. */
+    :root { --cast: #e6e8ec; --cast-border: #d3d7dc; }
+    #menu { width: max-content; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; scrollbar-width: none; }
+    #menu .cap { transition: background-color 180ms ease, border-color 180ms ease; }
+    .drop-head { background-color: var(--cast); border-color: var(--cast-border); box-shadow: none; }
+    .drop-tail { display: inline-flex; align-items: center; gap: 8px; margin-right: -2px; color: var(--sub); }
+    .drop-tail .hint { margin-left: 0; }
+    .chev { display: block; transition: transform 160ms ease; }
+    .drop-head.open .chev { transform: rotate(180deg); }
+    .drop-head:hover .chev { color: var(--ink); }
+    .drop { display: flex; flex-direction: column; gap: var(--gap); padding-left: 8px; }
+    .field { width: 312px; }
+    .field .k { flex-basis: 96px; }
+    .spread { justify-content: space-between; }
+    .spread .segs { margin-right: -8px; }
+    .spread .seg { padding: 0 9px; }
+    .swatches { display: flex; flex-wrap: wrap; justify-content: flex-end; max-width: 180px; align-items: center; gap: 5px; }
+    .swatch { position: relative; flex: none; width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(27,30,34,.14); }
+    .swatch.on { outline: 1.5px solid var(--focus); outline-offset: 1.5px; }
+    .swatch.auto { background: linear-gradient(135deg,#ffffff 50%,#2a2926 50%); }
+    .swatch.custom { display: grid; place-items: center; overflow: hidden; cursor: pointer; background: var(--panel); color: var(--sub); }
+    .swatch.custom input { position: absolute; inset: -6px; width: 26px; height: 26px; opacity: 0; cursor: pointer; }
+    .swatch-row { height: auto; min-height: var(--h); padding-top: 4px; padding-bottom: 4px; }
+    .swatch-editor { gap: 6px; padding: 4px 8px; height: auto; }
+    .swatch-editor input[type="color"] { width: 24px; height: 22px; flex: none; padding: 0; border: 0; }
+    .swatch-editor input[type="text"] { width: 75px; min-width: 0; flex: 1; }
+    .swatch-editor .btn { padding: 0 6px; }
+    .metadata-add { border-style: dashed; }
+    .metadata-add input { flex: 1; min-width: 0; width: 100px; border: 0; background: transparent; }
+    #src { max-width: 280px; }
+    @media (min-width: 1500px) { #src { bottom: 16px; } }
+    .slide { position: relative; display: flex; flex: none; width: 148px; }
+    .slider {
+      position: relative;
+      flex: 1 1 auto;
+      min-width: 0;
+      height: var(--pill);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--panel);
+      cursor: pointer;
+      touch-action: none;
+    }
+    .rail {
+      position: absolute;
+      left: 7px;
+      right: 7px;
+      top: 50%;
+      height: 4px;
+      margin-top: -2px;
+      border-radius: 2px;
+      background: #d9dde2;
+    }
+    .thumb {
+      position: absolute;
+      top: 50%;
+      width: 17px;
+      height: 12px;
+      margin: -6px 0 0 -8.5px;
+      border-radius: 6px;
+      background: var(--accent);
+      box-shadow: 0 1px 2px rgba(15, 143, 130, 0.22);
+      transition: background-color 120ms ease;
+    }
+    .slider:hover .thumb { background: #27c6b3; }
+    .slider:focus { outline: none; }
+    .slider:focus-visible { box-shadow: 0 0 0 2.5px rgba(47, 211, 192, 0.3); }
+    .thumb.mixed, .slider:hover .thumb.mixed { background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--accent); }
+    .slide-row { gap: 8px; padding-right: 3px; }
+    .slide-row .k { flex: 0 0 58px; overflow: hidden; text-overflow: ellipsis; }
+    .slide-row .slide { flex: 1 1 auto; width: auto; min-width: 0; }
+
+    #slide-tip {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 46;
+      height: 18px;
+      padding: 0 7px;
+      border: 1px solid var(--border-strong);
+      border-radius: 9px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      color: var(--ink);
+      font-size: 11px;
+      line-height: 16px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 240ms ease;
+    }
+    #slide-tip.show { opacity: 1; transition: opacity 60ms ease; }
+
+    /* Click the slider to type: the pill becomes a field in its place, the
+       number selected, the unit quiet beside it, in the accent ring. */
+    .slide-entry {
+      display: flex;
+      align-items: center;
+      flex: 1 1 auto;
+      min-width: 0;
+      height: var(--pill);
+      padding: 0 9px;
+      border: 1px solid rgba(15, 143, 130, 0.55);
+      border-radius: 999px;
+      background: var(--panel);
+      box-shadow: 0 0 0 2.5px rgba(15, 143, 130, 0.1);
+      cursor: text;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+    .slide-input {
+      flex: 1 1 auto;
+      width: 100%;
+      min-width: 0;
+      height: 100%;
+      padding: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    .slide-input::placeholder { color: var(--sub); opacity: 0.8; }
+    .slide-input::selection { background: rgba(15, 143, 130, 0.22); }
+    .slide-unit { flex: none; margin-left: 4px; color: var(--sub); font-size: 11px; }
+    .slide-entry.bad { border-color: rgba(192, 57, 43, 0.75); box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.14); }
+    .slide-entry.shake { animation: sf-shake 280ms ease-in-out; }
+    .stepper .round { font-size: 13px; line-height: 1; }
+
+
+    #menu { width: 268px; }
+    #menu .field { width: auto; }
+    #menu { background: #fff; padding: 7px; border-radius: 18px; box-shadow: 0 5px 22px #1b1e2220; }
+    #menu > .cap, #menu > .drop > .cap { box-shadow: none; }
+    .solve-capsule { display: flex; align-items: center; gap: 5px; border-radius: 20px; padding: 3px; background: #ebe9e4; }
+    #tb-repack { background: #fff; border-radius: 16px; box-shadow: 0 1px 3px #0002; color: #252723; }
+    .alignment { justify-content: space-between; }
+    .alignment .seg { height: 24px; min-width: 30px; display: inline-flex; align-items: center; justify-content: center; }
+    .stepper { display: inline-flex; align-items: center; gap: 8px; }
+    .stepper .val { min-width: 75px; text-align: center; }
+  </style>
+  <link rel="stylesheet" href="chrome.css">
+</head>
+<body>
+  <canvas id="board" aria-label="Packed spaces. Drag cards beside each other to rearrange. Right-click for controls."></canvas>
+  <div id="src" class="cap row">
+    <button id="src-open" class="btn file" type="button" title="Open a spreadsheet (.csv or .xlsx), or a saved Pack ZIP or JSON. You can also drop it here.">
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5h4l2.5 2.5v6.5h-6.5z M7 1.5v2.5h2.5" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>
+      <span id="src-name">No file</span>
+    </button>
+    <span id="status" class="sub"></span>
+    <span class="divider"></span>
+    <button hidden id="src-sample" class="btn sub" type="button" title="Reload the sample program">Sample</button>
+  </div>
+  <div id="empty" hidden>
+    <span class="drop-title">Drop a spreadsheet or saved Pack board here</span>
+    <span class="drop-sub">The same spreadsheet as the program board. Each row becomes a tile whose area is its square feet.</span>
+    <button id="empty-browse" class="btn" type="button">Browse</button>
+  </div>
+  <div id="toolbar" class="cap bar">
+    <div class="solve-capsule" role="group" aria-label="Optimize layout settings">
+    <button id="tb-algo" class="btn" type="button" title="Choose a strategy, then click Optimize to apply it to the whole layout">Squarified</button>
+    <span class="divider"></span>
+    <div id="nest" class="segs" role="radiogroup" aria-label="Nesting">
+      <button class="seg on" type="button" data-nest="flat" title="Flat layout on the next Optimize">Flat</button>
+      <button class="seg" type="button" data-nest="dept" title="Nest departments on the next Optimize">Dept</button>
+    </div>
+    <span class="divider"></span>
+    <button id="tb-repack" class="btn" type="button" title="Optimize the entire layout using the chosen strategy and nesting. Manual moves stay in place until you click this.">Optimize</button>
+    </div>
+    <button id="tb-aspect" class="btn" type="button" title="Frame proportions. Total area always matches the spreadsheet.">
+      <svg class="lock" width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect x="2" y="5" width="7" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M3.5 5V3.4a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+      <span id="aspect-label">16:10</span>
+    </button>
+    <button id="tb-fit" class="btn" type="button" title="Fit the frame in the window (F)">Fit viewport</button>
+    <span class="divider"></span>
+    <button id="tb-save" class="btn" type="button" title="Save CSV and layout JSON in a ZIP. Open it here to restore this board (Ctrl S).">Save</button>
+    <button id="tb-export" class="btn" type="button" title="Export">Export</button>
+    <button id="tb-display" class="btn" type="button" title="Switch between free layout and area packing">Display mode</button>
+    <span class="divider"></span>
+    <button id="tb-min" class="round" type="button" title="Tuck the toolbar away">
+      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <button id="blister" type="button" title="Show the toolbar" hidden></button>
+  <div id="pop-algo" class="stack" hidden></div>
+  <div id="pop-aspect" class="stack" hidden></div>
+  <div id="pop-export" class="stack" hidden></div>
+  <div id="menu" class="stack" hidden></div>
+  <div id="slide-tip"></div>
+  <div id="toast" class="cap" hidden></div>
+  <input id="name-input" class="name-input" type="text" autocomplete="off" spellcheck="false" aria-label="Space name" hidden>
+  <input id="file" type="file" accept=".csv,.xlsx,.xlsm,.zip,.json,text/csv" hidden>
+  <script src="appearance.js"></script>
+  <script src="engine.js"></script>
+  <script src="leaders.js"></script>
+  <script src="mode-state.js"></script>
+  <script src="pack-engine.js?v=7"></script>
+  <script src="program-seed.js"></script>
+  <script src="chrome.js"></script>
+  <script src="pack.js?v=20"></script>
+  <script src="display-mode.js?v=2"></script>
+</body>
+</html>

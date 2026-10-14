@@ -1,0 +1,11 @@
+# Build output, local dependencies, and private starter data.
+dist/
+*.zip
+node_modules/
+.local/
+sample.csv
+*.layout.json
+*.clone.csv
+.env
+.env.*
+!.env.example

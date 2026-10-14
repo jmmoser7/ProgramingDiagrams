@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Program board</title>
+  <link rel="icon" href="data:,">
+  <style>
+    /* Aliases that reach installed Replica cuts by their PostScript names,
+       in case the family name is registered differently on this machine. */
+    @font-face {
+      font-family: 'PB Replica';
+      font-weight: 400;
+      src: local('ReplicaStd-Regular'), local('Replica Std Regular'), local('ReplicaStd Regular');
+    }
+    @font-face {
+      font-family: 'PB Replica Mono';
+      font-weight: 400;
+      src: local('ReplicaMono-Regular'), local('Replica Mono Regular'), local('ReplicaMonoStd-Regular');
+    }
+    :root {
+      --panel: #ffffff;
+      --ink: #1b1e22;
+      --sub: #8a9098;
+      --border: #e1e4e8;
+      --border-strong: #cdd2d8;
+      --accent: #2fd3c0;
+      --on-accent: #0e1013;
+      --focus: #0f8f82;
+      --hover: rgba(27, 30, 34, 0.05);
+      --press: rgba(27, 30, 34, 0.09);
+      --h: 24px;
+      --r: 12px;
+      --pill: 18px;
+      --gap: 4px;
+      --cast: #e6e8ec;
+      --cast-border: #d3d7dc;
+      --shadow: 0 1px 2px rgba(20, 24, 28, 0.05), 0 2px 10px rgba(20, 24, 28, 0.06);
+      --font: 'Replica Std', 'Replica', 'ReplicaStd', 'PB Replica', 'Segoe UI', sans-serif;
+    }
+    [hidden] { display: none !important; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    body {
+      font: 12px/1 var(--font);
+      color: var(--ink);
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    button {
+      font: inherit;
+      color: inherit;
+      background: none;
+      border: 0;
+      margin: 0;
+      padding: 0;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button:disabled { color: var(--sub); opacity: 0.45; cursor: default; }
+    input { font: inherit; color: inherit; margin: 0; user-select: text; }
+    #board {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    /* The one capsule. Every floating surface is built from it. */
+    .cap {
+      height: var(--h);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background-color: var(--panel);
+      box-shadow: var(--shadow);
+      color: var(--ink);
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      flex: none;
+      padding: 0 12px;
+      white-space: nowrap;
+    }
+    .sub { color: var(--sub); }
+
+    /* A pill inside a capsule: a button, or one segment of a toggle. */
+    .btn, .seg {
+      height: var(--pill);
+      padding: 0 10px;
+      border-radius: calc(var(--pill) / 2);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    a.btn { text-decoration: none; color: inherit; }
+    .btn:hover:not(:disabled), .seg:hover { background: var(--hover); }
+    .btn:active:not(:disabled), .seg:active { background: var(--press); }
+    .segs {
+      display: inline-flex;
+      align-items: center;
+      height: calc(var(--pill) + 2px);
+      padding: 1px;
+      border: 1px solid var(--border);
+      border-radius: calc(var(--pill) / 2 + 1px);
+    }
+    .seg { height: calc(var(--pill) - 2px); color: var(--sub); }
+    .seg:hover { color: var(--ink); }
+    .seg.on, .seg.on:hover { background: var(--accent); color: var(--on-accent); }
+    .round {
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: var(--pill);
+      height: var(--pill);
+      border-radius: 50%;
+      color: var(--sub);
+    }
+    .round:hover { background: var(--hover); color: var(--ink); }
+    .round svg { display: block; }
+    .divider { flex: none; width: 1px; height: 14px; margin: 0 4px; background: var(--border); }
+
+    /* Stacks: separate capsules a few pixels apart, nothing behind them. */
+    .stack {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+    }
+    #menu { z-index: 30; }
+    .item { width: 100%; justify-content: space-between; text-align: left; }
+    .item:hover { background-image: linear-gradient(var(--hover), var(--hover)); }
+    .item:active { background-image: linear-gradient(var(--press), var(--press)); }
+    .item.danger:hover { color: #9b1c1c; }
+    .hint { color: var(--sub); font-size: 11px; margin-left: 12px; }
+    .spread { justify-content: space-between; }
+    .spread .segs { margin-right: -8px; }
+    .spread .seg { padding: 0 9px; }
+    .swatches { display: flex; align-items: center; gap: 5px; }
+    .swatch {
+      position: relative;
+      flex: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid rgba(27, 30, 34, 0.14);
+    }
+    .swatch.on { outline: 1.5px solid var(--focus); outline-offset: 1.5px; }
+    .gradient-ends { gap: 8px; }
+    .gradient-ends input[type=color] { width: 20px; height: 20px; border: 0; padding: 0; background: transparent; cursor: pointer; }
+    .gradient-ends input[type=color]::-webkit-color-swatch-wrapper { padding: 2px; }
+    .gradient-ends input[type=color]::-webkit-color-swatch { border: 1px solid var(--border); border-radius: 50%; }
+    .gradient-preview { flex: 1; min-width: 62px; height: 8px; border-radius: 4px; }
+    .gradient-swatch { width: 24px; border-radius: 7px; }
+    .gradient-note { color: var(--sub); font-size: 10px; }
+    /* Auto: no colour of its own, the ink follows what it sits on. */
+    .swatch.auto { background: linear-gradient(135deg, #ffffff 50%, #2a2926 50%); }
+    .swatch.custom {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      cursor: pointer;
+      background: var(--panel);
+      color: var(--sub);
+    }
+    .swatch.custom:hover { color: var(--ink); border-color: var(--border-strong); }
+    .swatch.custom svg { display: block; pointer-events: none; }
+    .swatch.custom.on svg { display: none; }
+    .swatch.custom input {
+      position: absolute;
+      inset: -6px;
+      width: 26px;
+      height: 26px;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* Metadata: one thin capsule per field, labels and values on two columns. */
+    #data {
+      max-height: calc(100vh - 16px);
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+    #data::-webkit-scrollbar { display: none; }
+    .field { width: 312px; }
+    .field .k {
+      flex: 0 0 112px;
+      padding-right: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--sub);
+    }
+    .field input {
+      height: 18px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      outline: none;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+    }
+    .field .v { flex: 1 1 auto; min-width: 0; }
+    .field .key { flex: 0 0 102px; margin-right: 10px; }
+    .field input:focus { box-shadow: inset 0 -1px 0 var(--focus); }
+    .field input::placeholder { color: var(--sub); opacity: 0.55; }
+    .field .num { flex: none; min-width: 2ch; font-variant-numeric: tabular-nums; }
+    /* No value on any selected sticky: grey, and still editable. */
+    .field.empty { background-color: #f3f4f6; border-color: #e9ebee; box-shadow: none; }
+    .field.empty .k { color: #b1b6bd; }
+    .field.empty input { color: #9aa0a7; }
+    .unit { color: var(--sub); margin-left: 4px; }
+    .readout { font-variant-numeric: tabular-nums; }
+    .plus {
+      width: 312px;
+      border-style: dashed;
+      border-color: var(--border-strong);
+      box-shadow: none;
+      color: var(--sub);
+      font-size: 15px;
+      font-weight: 300;
+    }
+    .plus:hover, .plus:focus-visible { color: var(--ink); background-image: linear-gradient(var(--hover), var(--hover)); outline: none; }
+
+    /* Toolbar, its blister, and the popovers that rise from it. */
+    .bar, .pop {
+      position: fixed;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 0 3px;
+    }
+    .bar {
+      left: 50%;
+      bottom: 16px;
+      z-index: 10;
+      transform: translateX(-50%);
+    }
+    .bar .btn { padding: 0 11px; }
+    .bar .btn .dot {
+      width: 5px;
+      height: 5px;
+      margin-left: -3px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    #blister {
+      position: fixed;
+      left: 50%;
+      bottom: 12px;
+      z-index: 10;
+      width: 56px;
+      height: 20px;
+      transform: translateX(-50%);
+      display: grid;
+      place-items: center;
+    }
+    #blister::before {
+      content: '';
+      width: 40px;
+      height: 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: 4px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      transition: width 120ms ease, height 120ms ease;
+    }
+    #blister:hover::before { width: 48px; height: 10px; border-radius: 5px; }
+    .pop { z-index: 25; gap: 6px; padding: 0 3px; }
+    /* The one slider: a white pill nested in its capsule, a soft rail, and
+       a borderless oblong accent thumb (hollow while the value is mixed). */
+    .slide { position: relative; display: flex; flex: none; width: 148px; }
+    .slider {
+      position: relative;
+      flex: 1 1 auto;
+      min-width: 0;
+      height: var(--pill);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--panel);
+      cursor: pointer;
+      touch-action: none;
+    }
+    .rail {
+      position: absolute;
+      left: 7px;
+      right: 7px;
+      top: 50%;
+      height: 4px;
+      margin-top: -2px;
+      border-radius: 2px;
+      background: #d9dde2;
+    }
+    .thumb {
+      position: absolute;
+      top: 50%;
+      width: 17px;
+      height: 12px;
+      margin: -6px 0 0 -8.5px;
+      border-radius: 6px;
+      background: var(--accent);
+      box-shadow: 0 1px 2px rgba(15, 143, 130, 0.22);
+      transition: background-color 120ms ease;
+    }
+    .slider:hover .thumb { background: #27c6b3; }
+    .slider:focus { outline: none; }
+    .slider:focus-visible { box-shadow: 0 0 0 2.5px rgba(47, 211, 192, 0.3); }
+    .thumb.mixed, .slider:hover .thumb.mixed { background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--accent); }
+    /* The spreadsheet portal, bottom left. */
+    #src {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 10;
+      gap: 2px;
+      max-width: calc(50vw - 150px);
+      padding: 0 3px 0 3px;
+    }
+    #src .file { min-width: 0; max-width: 220px; padding: 0 8px; }
+    #src .file span { overflow: hidden; text-overflow: ellipsis; }
+    #src .file svg { flex: none; color: var(--sub); }
+    #status {
+      padding: 0 6px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-variant-numeric: tabular-nums;
+    }
+    #src.drop { border-color: var(--focus); box-shadow: 0 0 0 3px rgba(47, 211, 192, 0.22); }
+
+    /* No spreadsheet yet (a blank seed and nothing saved): one dashed box
+       in the middle of the board that takes a drop or opens the picker. It
+       lights while a file is dragged over the window. */
+    #empty {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 360px;
+      height: 196px;
+      padding: 20px 24px;
+      border: 1.5px dashed var(--border-strong);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      color: var(--ink);
+      cursor: pointer;
+      transform: translate(-50%, -50%);
+      transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+    }
+    #empty:hover { border-color: var(--sub); }
+    #empty:focus-visible { outline: none; border-color: var(--focus); }
+    #empty .drop-icon { display: block; color: var(--sub); margin-bottom: 2px; transition: color 120ms ease, transform 120ms ease; }
+    #empty .drop-title { font-size: 14px; line-height: 18px; }
+    #empty .drop-sub { color: var(--sub); font-size: 11px; line-height: 14px; text-align: center; }
+    #empty .btn { margin-top: 6px; border: 1px solid var(--border); }
+    #empty.drop {
+      border-color: var(--focus);
+      background: #f1fcfa;
+      box-shadow: 0 0 0 4px rgba(47, 211, 192, 0.2), var(--shadow);
+      transform: translate(-50%, -50%) scale(1.02);
+    }
+    #empty.drop .drop-icon { color: var(--focus); transform: translateY(-2px); }
+
+    /* Save: a check while it confirms, a quiet dot while the board differs
+       from the last save. The width holds so the bar never shifts. */
+    #tb-save { min-width: 70px; justify-content: center; }
+    .bar .btn .dot.unsaved {
+      width: 4px;
+      height: 4px;
+      margin: 0 -4px 0 -2px;
+      background: var(--sub);
+      opacity: 0.7;
+    }
+    #tb-save.saved { color: var(--focus); }
+    .check {
+      width: 8px;
+      height: 5px;
+      margin: -3px -1px 0 -3px;
+      border: solid currentColor;
+      border-width: 0 0 1.4px 1.4px;
+      transform: rotate(-45deg);
+    }
+
+    /* Align: Slate's strip of eight glyphs under a multi-selection. */
+    #align {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 15;
+      height: var(--h);
+      gap: 0;
+      padding: 0 2px;
+    }
+    #align .sep { flex: none; width: 1px; height: 12px; margin: 0 3px; background: var(--border); }
+    .ico {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: var(--pill);
+      border-radius: calc(var(--pill) / 2);
+      color: var(--ink);
+    }
+    .ico svg { display: block; }
+    .ico:hover:not(:disabled) { background: var(--ink); color: #ffffff; }
+    .ico:disabled { color: var(--sub); opacity: 0.4; }
+    #align-tip {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 16;
+      height: 18px;
+      padding: 0 8px;
+      border-radius: 9px;
+      background: var(--ink);
+      color: #ffffff;
+      font-size: 10px;
+      line-height: 18px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /* In-place editors for the frame's stringer labels and its title. */
+    .dim-input, .title-input {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 18;
+      padding: 0 8px;
+      border: 1px solid #1f6fb2;
+      border-radius: 999px;
+      outline: none;
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(31, 111, 178, 0.14), var(--shadow);
+      color: #1f6fb2;
+      line-height: 1;
+      transform-origin: 50% 50%;
+    }
+    .dim-input { text-align: center; font-variant-numeric: tabular-nums; }
+    .dim-input.bad {
+      border-color: #c0392b;
+      color: #c0392b;
+      box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.16), var(--shadow);
+    }
+    .title-input {
+      transform-origin: 0 50%;
+      border-color: var(--border-strong);
+      box-shadow: 0 0 0 3px rgba(15, 143, 130, 0.12), var(--shadow);
+      color: var(--ink);
+    }
+    .dim-input::selection, .title-input::selection { background: rgba(31, 111, 178, 0.2); }
+
+    /* Inline text on the board: borderless, at the block's own size. */
+    .text-input {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 18;
+      margin: 0;
+      padding: 2px 4px;
+      border: 0;
+      border-radius: 3px;
+      outline: none;
+      resize: none;
+      overflow: hidden;
+      white-space: pre;
+      background: rgba(255, 255, 255, 0.72);
+      box-shadow: 0 0 0 1px rgba(15, 143, 130, 0.45);
+      color: var(--ink);
+      font-family: var(--font);
+      user-select: text;
+    }
+
+    /* A sticky's name or area typed in place: the label's own type, size,
+       and wrapping on a clear ground inside a hairline accent ring. */
+    .name-input, .sf-input {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 18;
+      margin: 0;
+      border: 0;
+      outline: none;
+      resize: none;
+      overflow: hidden;
+      white-space: pre-wrap;
+      text-align: center;
+      background: transparent;
+      box-shadow: 0 0 0 1px rgba(15, 143, 130, 0.5), 0 0 0 2.5px rgba(15, 143, 130, 0.08);
+      font-family: var(--font);
+      font-weight: 400;
+      caret-color: currentColor;
+      user-select: text;
+    }
+    .name-input::placeholder { color: currentColor; opacity: 0.4; }
+    .name-input::selection, .sf-input::selection { background: rgba(15, 143, 130, 0.22); }
+    .sf-input { transition: box-shadow 160ms ease; }
+    .sf-input.bad { box-shadow: 0 0 0 1px rgba(192, 57, 43, 0.75), 0 0 0 3px rgba(192, 57, 43, 0.14); }
+    /* `translate` composes with the transform that places the box. */
+    .sf-input.shake { animation: sf-shake 280ms ease-in-out; }
+    @keyframes sf-shake {
+      20% { translate: -3px 0; }
+      45% { translate: 3px 0; }
+      70% { translate: -2px 0; }
+      90% { translate: 1px 0; }
+    }
+    .sf-unit {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 18;
+      font-family: var(--font);
+      font-weight: 400;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /* An on/off pill: a knob that slides, accent when on, a dash when mixed. */
+    .toggle {
+      position: relative;
+      flex: none;
+      display: inline-block;
+      width: 24px;
+      height: 14px;
+      border-radius: 7px;
+      background: var(--border-strong);
+      transition: background 120ms ease;
+    }
+    .toggle .knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 1px 1px rgba(14, 16, 19, 0.18);
+      transition: left 120ms ease;
+    }
+    .toggle.on, .fudge.on .toggle { background: var(--accent); }
+    .toggle.on .knob, .fudge.on .toggle .knob { left: 12px; }
+    .toggle.mixed .knob { left: 7px; width: 10px; height: 2px; top: 6px; border-radius: 1px; box-shadow: none; }
+    .fudge { color: var(--sub); }
+    .fudge.on { color: var(--ink); }
+
+    /* Menu rows with a slider or a stepper. */
+    #menu { width: 268px; }
+    #menu.scroll { max-height: calc(100vh - 16px); overflow-y: auto; scrollbar-width: none; }
+    #menu.scroll::-webkit-scrollbar { display: none; }
+    .slide-row { gap: 8px; padding-right: 3px; }
+    .slide-row .k { flex: 0 0 58px; overflow: hidden; text-overflow: ellipsis; }
+    .slide-row .slide { flex: 1 1 auto; width: auto; min-width: 0; }
+    .grid-row { padding-right: 12px; }
+    .grid-row.off .slide { opacity: 0.5; }
+    .line-ends { justify-content: space-between; padding: 0 6px; }
+    .end-btn {
+      display: inline-grid;
+      place-items: center;
+      width: 30px;
+      height: var(--pill);
+      border-radius: calc(var(--pill) / 2);
+      color: var(--sub);
+    }
+    .end-btn svg { display: block; }
+    .end-btn:hover { background: var(--hover); color: var(--ink); }
+    .end-btn.on { background: var(--accent); color: var(--on-accent); }
+    .line-ends.start svg { transform: scaleX(-1); }
+    .stepper { display: inline-flex; align-items: center; gap: 4px; margin-right: -8px; }
+    .stepper .val { min-width: 76px; text-align: center; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+    /* The slider's value, only while it is pressed, dragged, or stepped: a
+       small capsule riding above the thumb that fades after release. */
+    #slide-tip {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 46;
+      height: 18px;
+      padding: 0 7px;
+      border: 1px solid var(--border-strong);
+      border-radius: 9px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      color: var(--ink);
+      font-size: 11px;
+      line-height: 16px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 240ms ease;
+    }
+    #slide-tip.show { opacity: 1; transition: opacity 60ms ease; }
+
+    /* Click the slider to type: the pill becomes a field in its place, the
+       number selected, the unit quiet beside it, in the accent ring. */
+    .slide-entry {
+      display: flex;
+      align-items: center;
+      flex: 1 1 auto;
+      min-width: 0;
+      height: var(--pill);
+      padding: 0 9px;
+      border: 1px solid rgba(15, 143, 130, 0.55);
+      border-radius: 999px;
+      background: var(--panel);
+      box-shadow: 0 0 0 2.5px rgba(15, 143, 130, 0.1);
+      cursor: text;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+    .slide-input {
+      flex: 1 1 auto;
+      width: 100%;
+      min-width: 0;
+      height: 100%;
+      padding: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    .slide-input::placeholder { color: var(--sub); opacity: 0.8; }
+    .slide-input::selection { background: rgba(15, 143, 130, 0.22); }
+    .slide-unit { flex: none; margin-left: 4px; color: var(--sub); font-size: 11px; }
+    .slide-entry.bad { border-color: rgba(192, 57, 43, 0.75); box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.14); }
+    .slide-entry.shake { animation: sf-shake 280ms ease-in-out; }
+    .stepper .round { font-size: 13px; line-height: 1; }
+
+    /* The one dropdown (Metadata, Blobs, Text): a darker capsule with a
+       chevron that turns as its own capsules open beneath it. */
+    .drop-head { background-color: var(--cast); border-color: var(--cast-border); box-shadow: none; }
+    .drop-tail { display: inline-flex; align-items: center; gap: 8px; margin-right: -2px; color: var(--sub); }
+    .drop-tail .hint { margin-left: 0; }
+    .chev { display: block; transition: transform 160ms ease; }
+    .drop-head.open .chev { transform: rotate(180deg); }
+    .drop-head:hover .chev { color: var(--ink); }
+    .drop { display: flex; flex-direction: column; gap: var(--gap); padding-left: 8px; }
+    /* Metadata docked in its dropdown: the same capsules, in the menu's flow. */
+    #data.docked {
+      position: static;
+      z-index: auto;
+      max-height: none;
+      overflow: visible;
+      transform: none !important;
+    }
+    #data.docked .field, #data.docked .plus { width: auto; }
+    #data.docked .field .k { flex-basis: 96px; }
+    #data.docked .field .key { flex-basis: 86px; }
+
+    /* The reach of an "All groups" blob edit: its capsules take the blob's
+       colour as a light cast. */
+    #menu .cap { transition: background-color 180ms ease, border-color 180ms ease; }
+    #menu .scoped {
+      background-color: color-mix(in srgb, var(--scope) 13%, var(--panel));
+      border-color: color-mix(in srgb, var(--scope) 42%, var(--border));
+    }
+    #menu .scoped .slider { border-color: color-mix(in srgb, var(--scope) 30%, var(--border)); }
+
+    /* A per-item text setting: the mark that returns it to the board's. */
+    .reset {
+      display: inline-grid;
+      place-items: center;
+      width: 15px;
+      height: 15px;
+      margin: -2px 0 0 4px;
+      vertical-align: middle;
+      border-radius: 50%;
+      color: var(--sub);
+    }
+    .reset svg { display: block; }
+    .reset:hover { background: var(--hover); color: var(--ink); }
+    .seg.inherit { box-shadow: inset 0 0 0 1px var(--accent); color: var(--ink); }
+    .swatch-row { height: auto; min-height: var(--h); padding-top: 4px; padding-bottom: 4px; }
+    .swatch-row .swatches { flex-wrap: wrap; justify-content: flex-end; max-width: 176px; row-gap: 5px; }
+    /* A right-clicked custom dot shrinks away before it leaves the row. */
+    .swatch.extra.going {
+      transform: scale(0.2);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 120ms ease-in, opacity 120ms ease-in;
+    }
+    /* Right-click on a custom dot: a mini capsule with one quiet Delete. */
+    .swatch-ask {
+      position: absolute;
+      z-index: 1;
+      height: 22px;
+      gap: 8px;
+      padding: 0 2px 0 10px;
+      border-radius: 11px;
+      white-space: nowrap;
+    }
+    .swatch-ask .ask-hex { color: var(--sub); font-size: 11px; }
+    .swatch-ask .ask-del {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 16px;
+      padding: 0 8px;
+      border-radius: 8px;
+      color: #b0453a;
+    }
+    .swatch-ask .ask-del svg { display: block; }
+    .swatch-ask .ask-del:hover { color: #9b1c1c; background: rgba(192, 57, 43, 0.09); }
+    .field.bad {
+      border-color: #c0392b;
+      box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.16), var(--shadow);
+    }
+    .field.bad input { color: #c0392b; }
+
+    /* Category blobs: a small circle check on a category row, and one
+       capsule per key in the board menu's Blobs dropdown. */
+    .blob-check {
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 14px;
+      height: 14px;
+      margin-left: 8px;
+      padding: 0;
+      border: 1px solid var(--border-strong);
+      border-radius: 50%;
+      background: var(--panel);
+      color: transparent;
+    }
+    .blob-check svg { display: block; }
+    .blob-check:hover { border-color: var(--sub); color: var(--sub); }
+    .blob-check.on, .blob-check.on:hover { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+    .blob-check:focus-visible { outline: 1.5px solid var(--focus); outline-offset: 1.5px; }
+    .blob-row .blob-name {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: left;
+    }
+    .blob-row .hint { flex: none; font-variant-numeric: tabular-nums; }
+    .blob-head { justify-content: space-between; }
+    .blob-head .k { color: var(--sub); overflow: hidden; text-overflow: ellipsis; }
+    .blob-head .v { margin-left: 12px; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+    .blob-scope .seg { max-width: 118px; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: var(--pill); }
+    #blob-tip {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 45;
+      height: 18px;
+      padding: 0 8px;
+      border-radius: 9px;
+      background: var(--ink);
+      color: #ffffff;
+      font-size: 10px;
+      line-height: 18px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    #toast {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      z-index: 40;
+      max-width: 70vw;
+      padding: 0 14px;
+      line-height: 22px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+  </style>
+  <link rel="stylesheet" href="chrome.css">
+</head>
+<body>
+  <canvas id="board"></canvas>
+  <div id="src" class="cap row">
+    <button id="src-open" class="btn file" type="button" title="Open a spreadsheet (.csv, .xlsx), a saved .zip, or a spreadsheet and its .layout.json together, or drop them on the board. The spreadsheet itself is never changed.">
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5h4l2.5 2.5v6.5h-6.5z M7 1.5v2.5h2.5" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>
+      <span id="src-name"></span>
+    </button>
+    <span id="status" class="sub"></span>
+    <span id="src-div" class="divider"></span>
+    <button id="src-sample" class="btn sub" type="button" title="Reload the sample program">Sample</button>
+  </div>
+  <div id="empty" role="button" tabindex="0" aria-label="Drop CSV or ZIP bundle here, or browse for a file" hidden>
+    <svg class="drop-icon" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 18V6.5M9.5 11 14 6.5 18.5 11M6 17.5v3.5h16v-3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="drop-title">Drop CSV or ZIP bundle here</span>
+    <span class="drop-sub">.csv or .xlsx, a saved .zip, or a .csv with its .layout.json</span>
+    <button id="empty-browse" class="btn" type="button" title="Pick a spreadsheet, a saved .zip, or a spreadsheet and its .layout.json together">Browse</button>
+  </div>
+  <div id="toolbar" class="cap bar">
+    <div id="tools" class="segs" role="radiogroup" aria-label="Tool">
+      <button class="seg on" type="button" data-tool="select" title="Select (V)">Select</button>
+      <button class="seg" type="button" data-tool="line" title="Draw (D or L): straight lines, click-click or drag. Shift 45°, Tab locks direction, type a length, [ ] width">Draw</button>
+      <button class="seg" type="button" data-tool="text" title="Type (Y or T): click to type, drag to set a width">Type</button>
+    </div>
+    <span class="divider"></span>
+    <button id="tb-grid" class="btn" type="button" title="Grid (G)">Grid</button>
+    <button id="tb-fit" class="btn" type="button" title="Fit viewport (F)">Fit viewport</button>
+    <button id="tb-save" class="btn" type="button" title="Save the spreadsheet and layout as one .zip (Ctrl+S)">Save</button>
+    <button id="tb-export" class="btn" type="button" title="Export">Export</button>
+    <span class="divider"></span>
+    <button id="tb-display" class="btn" type="button" title="Switch between Board, Pack, and Isometric">Display mode</button>
+    <span class="divider"></span>
+    <button id="tb-min" class="round" type="button" title="Tuck the toolbar away">
+      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <button id="blister" type="button" title="Show the toolbar" hidden></button>
+  <div id="pop-grid" class="cap pop" hidden>
+    <div class="segs">
+      <button id="grid-on" class="seg" type="button">On</button>
+      <button id="grid-off" class="seg" type="button">Off</button>
+    </div>
+    <span class="divider"></span>
+    <button id="grid-fudge" class="btn fudge" type="button"><span class="toggle" aria-hidden="true"><span class="knob"></span></span>Fudge to grid</button>
+  </div>
+  <div id="pop-export" class="cap pop" hidden>
+    <div class="segs">
+      <button class="seg" type="button" data-export="csv" title="A copy of the spreadsheet with your edits">CSV</button>
+      <button class="seg" type="button" data-export="png" title="The frame and its stickies on a transparent canvas">PNG</button>
+      <button class="seg" type="button" data-export="svg" title="Vector drawing of the frame and its stickies">SVG</button>
+      <button class="seg" type="button" data-export="3dm" title="Rhino model in feet: frame, stickies with their metadata, lines, and text">3DM</button>
+    </div>
+  </div>
+  <div id="menu" class="stack" hidden></div>
+  <div id="data" class="stack" hidden></div>
+  <div id="toast" class="cap" hidden></div>
+  <div id="align" class="cap row" role="toolbar" aria-label="Align" hidden></div>
+  <div id="align-tip" hidden></div>
+  <div id="blob-tip" hidden></div>
+  <div id="slide-tip" aria-hidden="true"></div>
+  <input id="dim-input" class="dim-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="Frame size in feet" hidden>
+  <input id="title-input" class="title-input" type="text" autocomplete="off" spellcheck="false" aria-label="Frame title" hidden>
+  <textarea id="text-input" class="text-input" autocomplete="off" spellcheck="false" rows="1" aria-label="Text" hidden></textarea>
+  <textarea id="name-input" class="name-input" autocomplete="off" spellcheck="false" rows="1" placeholder="Name" aria-label="Sticky name" hidden></textarea>
+  <input id="sf-input" class="sf-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="Area in square feet" hidden>
+  <span id="sf-unit" class="sf-unit" aria-hidden="true" hidden>sf</span>
+  <input id="file" type="file" accept=".zip,.csv,.xlsx,.xlsm,.json,application/zip,text/csv,application/json" multiple hidden>
+  <script id="seed" type="text/plain"></script>
+  <script src="blob.js"></script>
+  <script src="appearance.js"></script>
+  <script src="engine.js"></script>
+  <script src="leaders.js"></script>
+  <script src="mode-state.js"></script>
+  <script src="program-seed.js"></script>
+  <script src="chrome.js"></script>
+  <script src="app.js"></script>
+  <script src="display-mode.js?v=2"></script>
+</body>
+</html>
