@@ -3,6 +3,10 @@
 Licensed under the [MIT License](LICENSE). Vendored Rhino assets retain their
 [third-party license notices](vendor/rhino3dm-LICENSE.txt).
 
+For another person or coding agent taking over a fork, start with
+[AGENT_HANDOFF.md](AGENT_HANDOFF.md). The shared interaction contract and current
+mode differences are documented in [KEY_MODIFIERS.md](KEY_MODIFIERS.md).
+
 ## Drag feel bench
 
 Open [drag-feel.html](drag-feel.html) for a focused four-block bench using the board's solid collision engine. Tune the block buffer, smoothness, friction, inertia, magnetic grid and neighbor snapping, contact response, and the resistance and release of pressure climbing while dragging. Presets and an A/B comparison help find a firmer, tactile feel. Settings save independently on this device and can be imported or exported for comparison; the bench does not change the program board's settings or data.
@@ -273,7 +277,7 @@ node build-netlify.js
 
 This writes `dist/` and `program-board-netlify.zip`, then drag the zip onto [app.netlify.com/drop](https://app.netlify.com/drop), or onto the site's **Deploys** tab. `index.html` sits at the zip root, so the site serves it at `/`.
 
-- **Copied:** the Board, Pack, and Isometric runtime files listed in `build-netlify.js`, shared chrome, appearance and data helpers, and vendored Rhino assets. Tests, synthetic fixtures, private local data, vendor build tools, and this README remain outside the deploy bundle.
+- **Copied:** the Board, Pack, and Isometric runtime files listed in `build-netlify.js`, shared chrome, appearance and data helpers, vendored Rhino assets and license notices, the standalone interaction and drag-feel labs, and selected research docs. Tests, synthetic fixtures, private local data, vendor build tools, this README, and the handoff/modifier guides remain outside the deploy bundle.
 - **Emptied:** the embedded seed (`<script id="seed">`) and `program-seed.js`, including starter file names. The page opens on an empty board with a centred drop box and **Browse**. It accepts CSV, XLSX, saved ZIPs, and CSV/layout pairs. The repository also ships empty seeds; previously saved browser data still restores normally.
 - **Modes:** Board, Pack, and Isometric share the loaded program. Visitors start empty until they open their own spreadsheet or saved board. Pack uses the same shared seed module and never fetches a private local spreadsheet.
 - **Headers:** a `_headers` file tells Netlify to revalidate the page, `app.js`, `engine.js`, and `cad.js` on every load, because their names never change between deploys. The vendored rhino3dm files are cached for a week. Netlify already serves `.js` with the right content type.
