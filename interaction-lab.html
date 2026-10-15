@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Feel — Interaction laboratory</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="interaction-lab/style.css">
+  <script defer src="interaction-lab/accepted-preferences.js"></script>
+  <script defer src="interaction-lab/catalog.js"></script>
+  <script defer src="interaction-lab/model.js"></script>
+  <script defer src="interaction-lab/tracking-guides.js"></script>
+  <script defer src="interaction-lab/direction-constraint.js"></script>
+  <script defer src="interaction-lab/scene-precision.js"></script>
+  <script defer src="interaction-lab/stage.js"></script>
+  <script defer src="interaction-lab/app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <a class="wordmark" href="interaction-lab.html"><span class="logo" aria-hidden="true">f.</span><strong>Feel</strong><span class="wordmark-sub">INTERACTION LABORATORY</span></a>
+    <div class="header-meta"><span class="live-dot"></span> Local workspace <span class="divider">/</span> Rhino × Atlas</div>
+    <nav class="header-actions" aria-label="Workspace"><a href="index.html">Program board ↗</a><a href="drag-feel.html">Drag feel ↗</a><a href="docs/interaction-language/README.md" target="_blank">Research ↗</a><button id="recovery-button" hidden>Download recovery copy</button><button id="import-button">Import</button><button id="export-button" class="dark">Export workspace ↓</button><input type="file" id="import-file" accept="application/json,.json" hidden></nav>
+  </header>
+  <main class="workspace">
+    <aside class="library" aria-label="Interaction library">
+      <div class="library-heading"><div><span class="eyebrow">THE COLLECTION</span><h1>Interaction studies</h1></div><span id="total-count" class="count"></span></div>
+      <label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find a behavior…" aria-label="Search interaction studies"><kbd>/</kbd></label>
+      <div id="category-list" class="categories"></div>
+      <div class="studies-heading"><span id="category-label">CASE STUDIES</span><button id="select-visible" title="Select every visible prototype in this category">Select all</button></div>
+      <div class="preference-legend" aria-label="Preference status legend"><span><i data-state="unaltered"></i>Unaltered</span><span><i data-state="altered"></i>Altered / pending</span><span><i data-state="committed"></i>Locked in / applied</span><span><i data-state="addressed"></i>Addressed</span></div>
+      <div id="case-list" class="case-list"></div>
+      <div class="library-footer"><div class="batch-summary"><span id="batch-count">Current interface</span><button id="clear-batch">Clear selection</button></div><button id="commit-selected" class="commit-primary">Commit preferences</button><button id="revert-committed" class="commit-revert" disabled>Revert to locked-in preferences</button><p id="commit-summary" role="status">Tweaks preview immediately. Commit to lock them in.</p><p id="worker-status" class="worker-status" role="status" data-worker="offline">Connecting to background worker…</p><p class="selection-help">Shift-click capsules for a range. Ctrl-click toggles individual studies.</p></div>
+    </aside>
+    <section class="experiment" aria-label="Active interaction study">
+      <div class="study-header"><div><div id="study-breadcrumb" class="eyebrow"></div><h2 id="study-title"></h2><p id="study-description"></p></div><span class="study-number" id="study-number"></span></div>
+      <div class="scene-toolbar"><div class="toolbar-left"><span class="scene-dot"></span><strong>Test scene</strong><span id="study-status" class="badge"></span></div><div class="toolbar-controls"><label id="type-filter-label">Pick <select id="type-filter" aria-label="Geometry selection filter"><option value="all">All types</option><option value="box">Boxes only</option><option value="circle">Circles only</option><option value="curve">Curves only</option><option value="subobjects">Sub-objects</option></select></label><button id="undo" title="Undo (Ctrl+Z)" aria-label="Undo scene change">↶</button><button id="redo" title="Redo (Ctrl+Y)" aria-label="Redo scene change">↷</button><button id="reset-scene">Reset scene</button></div></div>
+      <div class="viewport" id="viewport"><canvas id="scene" tabindex="0" aria-label="Interactive dummy geometry scene. Instructions appear above and in the case study below."></canvas><div id="scene-overlay" class="scene-overlay"></div><div class="viewport-label"><span>XY / SCHEMATIC</span><span>Dummy geometry · units</span></div><div class="scene-hint" id="scene-hint"></div></div>
+      <div class="scene-status"><span class="status-led"></span><span id="scene-message" role="status">Ready</span><span class="cursor-readout">Cursor <code id="cursor-value">default</code></span><span id="selection-count">0 selected</span></div>
+      <section class="notebook" aria-label="Case study notebook"><div class="notebook-tabs" role="tablist"><button role="tab" aria-selected="true" data-tab="study">Case study</button><button role="tab" aria-selected="false" data-tab="feedback">Written feedback <span id="feedback-count"></span></button><button role="tab" aria-selected="false" data-tab="events">Event trace</button></div><div id="study-panel" class="notebook-panel"></div><div id="feedback-panel" class="notebook-panel" hidden><div class="feedback-layout"><div><label class="eyebrow" for="feedback-text">WHAT DOES IT FEEL LIKE?</label><textarea id="feedback-text" placeholder="Describe what felt clear, hesitant, too sticky, or surprising…"></textarea><div class="feedback-actions"><label>Verdict <select id="feedback-verdict"><option>Needs tuning</option><option>Feels right</option><option>Needs native comparison</option></select></label><button id="save-feedback" class="dark">Save observation</button></div><p class="muted">Saved with the current study and settings. Commit / Update includes observations and the current draft.</p></div><p id="feedback-progress" class="feedback-progress" role="status"></p><div id="feedback-list" class="feedback-list"></div></div></div><div id="events-panel" class="notebook-panel" hidden><div class="event-heading"><p>Most recent input and authored changes. Hover events are sampled.</p><button id="clear-events">Clear trace</button></div><ol id="event-list" class="event-list"></ol></div></section>
+    </section>
+    <aside class="inspector" aria-label="Fine tuning inspector"><div class="inspector-heading"><span class="eyebrow">FINE TUNING</span><h2>Make it feel right.</h2><p>Change one target, or the shared language.</p><button id="rhino-preset" style="margin-top:12px;font-size:10px;width:100%" title="Use locally observed Rhino values as base settings; explicit child overrides remain">Apply observed Rhino baseline</button></div><div class="scope-control"><label for="scope" class="eyebrow">EDIT SCOPE</label><select id="scope"><option value="prototype">Prototype / marked studies</option><option value="object">Selected geometry</option><option value="group">Geometry group</option><option value="category">Whole category</option><option value="document">Full document</option></select><div id="scope-summary"></div></div><details class="object-tree" open><summary>Scene objects <span id="object-total"></span></summary><div id="object-list"></div></details><div class="property-heading"><span>SHARED PROPERTIES</span><span id="property-count"></span></div><div id="properties" class="properties"></div><div class="inspector-footer"><button id="reset-overrides">Clear this scope’s overrides</button><p id="save-state" role="status">Saved on this device</p></div></aside>
+  </main>
+  <footer class="app-footer"><span><strong>Research baseline</strong> Rhino 8 / Windows · Atlas / Slate · 14 Oct 2026</span><span>Browser studies · experimental presets · local storage</span></footer>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

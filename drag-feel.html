@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Drag feel — Motion workshop</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="drag-feel/style.css">
+  <script defer src="iso-physics.js"></script>
+  <script defer src="drag-feel/physics.js"></script>
+  <script defer src="drag-feel/grip.js"></script>
+  <script defer src="drag-feel/app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="interaction-lab.html"><span class="brand-mark">f.</span><strong>Feel</strong><span class="brand-divider"></span><span class="brand-sub">MOTION WORKSHOP</span></a>
+    <nav aria-label="Workshop navigation"><a href="index.html">Program board ↗</a><a href="interaction-lab.html">All studies ↗</a><span class="local-badge"><i></i> Local sandbox</span></nav>
+  </header>
+  <main class="workspace">
+    <section class="bench" aria-labelledby="bench-title">
+      <div class="intro"><div><span class="eyebrow">01 / BLOCK DYNAMICS</span><h1 id="bench-title">Find the right <em>feel.</em></h1><p>A little weight. A quiet click. Just enough give.</p></div><span class="experiment-tag">FOUR BLOCKS.<br>EVERY LITTLE DETAIL.</span></div>
+      <div class="preset-bar"><div class="preset-options" role="group" aria-label="Starting feel"><span class="mini-label">START WITH</span><button data-preset="crisp" class="active">Crisp <span>↗</span></button><button data-preset="soft">Soft</button><button data-preset="heavy">Heavy</button><span id="custom-label" hidden>Custom</span></div><button id="reset-scene" class="text-button" title="Restore the four blocks; keep tuning">↺ Reset blocks</button></div>
+      <section class="stage-shell" aria-label="Block playground">
+        <div class="stage-topline"><span><i class="live-dot"></i> <b id="scene-state">READY TO DRAG</b><em id="neighbors-lock" class="modifier-badge" hidden>Ctrl · neighbors locked</em></span><div class="view-options" role="group" aria-label="View"><button id="view-iso" class="active" aria-pressed="true">3D</button><button id="view-top" aria-pressed="false">Top</button><span></span><button id="show-guides" class="active" aria-pressed="true">Guides</button><button id="sound" aria-pressed="false" title="Optional synthesized contact and snap clicks">Sound off</button></div></div>
+        <div class="viewport" id="viewport"><canvas id="scene" tabindex="0" aria-label="Drag the three colored blocks. Hover a vertex or edge midpoint to grab that exact feature, or grab anywhere on a block. Features near your grip snap more strongly, including to the supporting block. Hold Ctrl to keep neighbors fixed; press or release it during a drag to switch. Push against a block to climb; drag off to descend while holding. Scroll to zoom; middle-drag or Space-drag to pan. Arrow keys move the selected block; Escape cancels."></canvas><div class="floor-label"><span>THE PLAYGROUND</span><small>World units · same solid contact as the board</small></div><div id="feature-cue" class="feature-cue" role="status" hidden></div><div class="zoom-controls" role="group" aria-label="Playground zoom"><button id="zoom-out" aria-label="Zoom out" title="Zoom out (−)">−</button><output id="zoom-value" aria-label="Zoom level">100%</output><button id="zoom-in" aria-label="Zoom in" title="Zoom in (+)">+</button><button id="zoom-fit" title="Fit all blocks (0)">Fit</button></div><div class="stage-hint" id="stage-hint"><span class="hint-icon">↗</span> Hover a vertex or midpoint for a precise grip. Grab anywhere to drag.</div></div>
+        <div class="telemetry"><div><span class="metric-label">MOTION</span><strong id="speed-value">0 <small>u/s</small></strong></div><div><span class="metric-label">MAGNET</span><strong id="snap-value">Free</strong></div><div><span class="metric-label">CONTACT</span><strong id="contact-value">Clear</strong></div><div class="pressure-metric"><span class="metric-label">PUSH PRESSURE <b id="pressure-value">0%</b></span><div class="pressure-track" id="pressure-track" role="img" aria-label="Push pressure 0%; minimum climb pressure 30%"><i id="pressure-fill"></i><span id="pressure-threshold" class="pressure-threshold" title="Minimum climb pressure"></span></div><div class="pressure-legend"><span id="pressure-minimum">MIN 30%</span><span id="climb-progress" title="Progress toward climbing while pressure meets the minimum">Give 0%</span></div></div></div>
+      </section>
+      <div class="below-stage">
+        <section class="try-card"><div class="card-title"><span class="eyebrow">TRY THIS</span><span id="recipe-number">01 — 03</span></div><h2 id="recipe-title">Choose your grip.</h2><p id="recipe-description">Hover a corner or edge midpoint for a precise grip, or grab anywhere. Features near your grip catch more strongly, including on the block underneath.</p><div class="recipe-switch" role="group" aria-label="Practice gesture"><button data-recipe="0" class="active" aria-pressed="true">01 Features</button><button data-recipe="1" aria-pressed="false">02 Contact</button><button data-recipe="2" aria-pressed="false">03 Climb</button></div></section>
+        <section class="compare-card"><div class="card-title"><span class="eyebrow">TRUST YOUR HAND</span><span id="compare-status">Same starting feel</span></div><h2>Compare, then keep it.</h2><div class="compare-actions"><div class="compare-switch" role="group" aria-label="Compare saved and live tuning"><button id="compare-a" aria-pressed="false"><b>A</b> Saved</button><button id="compare-b" class="active" aria-pressed="true"><b>B</b> Live</button></div><button id="save-reference">Save as A <span>↗</span></button></div><p id="save-status" role="status">Tuning saves on this device. A keeps your reference feel.</p></section>
+      </div>
+      <footer class="bench-footer"><span><kbd>Scroll</kbd> Zoom <span class="footer-dot">·</span> <kbd>Space + drag</kbd> Pan <span class="footer-dot">·</span> <kbd>Ctrl</kbd> Lock neighbors <span class="footer-dot">·</span> <kbd>Alt</kbd> Free grip <span class="footer-dot">·</span> <kbd>↑ ↓ ← →</kbd> Move <span class="footer-dot">·</span> <kbd>Esc</kbd> Cancel</span><span>Experimental feel · synthetic blocks</span></footer>
+    </section>
+    <aside class="tuning" aria-labelledby="tuning-title"><div class="tuning-heading"><div><span class="eyebrow">THE CONTROL ROOM</span><h2 id="tuning-title">Small changes.<br>Big difference.</h2></div><span class="dial-symbol" aria-hidden="true">◴</span><p>Everything updates while you drag.</p></div><div class="tuning-scroll" id="controls"></div><div class="tuning-footer"><div><button id="export">Export feel ↓</button><button id="import">Import ↑</button><input id="import-file" type="file" accept=".json,application/json" hidden><button id="reset-tuning" class="text-button" title="Restore the crisp preset; keep your saved A reference">Reset</button></div><p id="storage-status" role="status"><i></i> Saved locally · program data stays separate</p></div></aside>
+  </main>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

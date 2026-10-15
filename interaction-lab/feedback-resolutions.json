@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "caseId": "subobject-face",
+      "feedbackHash": "9cac7928e23acb526d1a95ded7fa093829d52cc6c782391516b3d82c5057f9e4",
+      "summary": "Component highlights are confined to the selected face, edge or vertex. Ctrl+Shift selects individual polyline segments, including in the sub-object filter study.",
+      "files": [
+        "interaction-lab/stage.js",
+        "interaction-lab/test-lab-stage.js"
+      ],
+      "checks": [
+        "Stage regression suite: component draw paths exclude parent selection outlines",
+        "Stage regression suite: polyline segment selection across all sub-selection studies, toggle, additive selection and persistence"
+      ],
+      "implementedAt": "2026-10-14T18:38:14.571Z"
+    },
+    {
+      "caseId": "subobject-filter",
+      "feedbackHash": "18d391d2232fad2d1541eebbf9e3f0ba6e629f4322bf10427c6b5da81b9796ef",
+      "summary": "Component highlights are confined to the selected face, edge or vertex. Ctrl+Shift selects individual polyline segments, including in the sub-object filter study.",
+      "files": [
+        "interaction-lab/stage.js",
+        "interaction-lab/test-lab-stage.js"
+      ],
+      "checks": [
+        "Stage regression suite: component draw paths exclude parent selection outlines",
+        "Stage regression suite: polyline segment selection across all sub-selection studies, toggle, additive selection and persistence"
+      ],
+      "implementedAt": "2026-10-14T18:38:14.572Z"
+    },
+    {
+      "caseId": "subobject-face",
+      "feedbackHash": "3e78d4edfadf3c51330092382678e00d253b9f9aa3ff1e8440e9d6131f2f0d33",
+      "summary": "Ctrl+Shift window and crossing gestures add face, edge or vertex selections across multiple permitted geometries, including polyline segments. Locked geometry and type filters are respected.",
+      "files": [
+        "interaction-lab/stage.js",
+        "interaction-lab/test-component-marquee.js"
+      ],
+      "checks": [
+        "node interaction-lab/test-component-marquee.js: passed multi-object component containment/crossing, mixed curves, locks, filters and additive deduplication",
+        "Browser check: window selected nine components across three solids using the component filter"
+      ],
+      "implementedAt": "2026-10-14T19:20:47.445Z"
+    },
+    {
+      "caseId": "subobject-edge",
+      "feedbackHash": "3e78d4edfadf3c51330092382678e00d253b9f9aa3ff1e8440e9d6131f2f0d33",
+      "summary": "Ctrl+Shift window and crossing gestures add face, edge or vertex selections across multiple permitted geometries, including polyline segments. Locked geometry and type filters are respected.",
+      "files": [
+        "interaction-lab/stage.js",
+        "interaction-lab/test-component-marquee.js"
+      ],
+      "checks": [
+        "node interaction-lab/test-component-marquee.js: passed multi-object component containment/crossing, mixed curves, locks, filters and additive deduplication",
+        "Browser check: window selected nine components across three solids using the component filter"
+      ],
+      "implementedAt": "2026-10-14T19:20:47.445Z"
+    },
+    {
+      "caseId": "subobject-vertex",
+      "feedbackHash": "3e78d4edfadf3c51330092382678e00d253b9f9aa3ff1e8440e9d6131f2f0d33",
+      "summary": "Ctrl+Shift window and crossing gestures add face, edge or vertex selections across multiple permitted geometries, including polyline segments. Locked geometry and type filters are respected.",
+      "files": [
+        "interaction-lab/stage.js",
+        "interaction-lab/test-component-marquee.js"
+      ],
+      "checks": [
+        "node interaction-lab/test-component-marquee.js: passed multi-object component containment/crossing, mixed curves, locks, filters and additive deduplication",
+        "Browser check: window selected nine components across three solids using the component filter"
+      ],
+      "implementedAt": "2026-10-14T19:20:47.445Z"
+    },
+    {
+      "caseId": "subobject-filter",
+      "feedbackHash": "3e78d4edfadf3c51330092382678e00d253b9f9aa3ff1e8440e9d6131f2f0d33",
+      "summary": "Ctrl+Shift window and crossing gestures add face, edge or vertex selections across multiple permitted geometries, including polyline segments. Locked geometry and type filters are respected.",
+      "files": [
+        "interaction-lab/stage.js",
+        "interaction-lab/test-component-marquee.js"
+      ],
+      "checks": [
+        "node interaction-lab/test-component-marquee.js: passed multi-object component containment/crossing, mixed curves, locks, filters and additive deduplication",
+        "Browser check: window selected nine components across three solids using the component filter"
+      ],
+      "implementedAt": "2026-10-14T19:20:47.445Z"
+    },
+    {
+      "caseId": "snap-center",
+      "feedbackHash": "02ff268da6a2f25976c0fbcd5036b0bf5a0b88c9aca51e7a6f230a7460df8b91",
+      "summary": "Center acquisition now accepts hovering near a circular or elliptical profile boundary and resolves to its actual center, with visible pointer-to-center feedback.",
+      "files": [
+        "interaction-lab/stage.js",
+        "interaction-lab/test-precision-stage.js"
+      ],
+      "checks": [
+        "node interaction-lab/test-precision-stage.js: passed rotated elliptical boundary acquisition, release and scoped snap disable",
+        "Browser check: clicking the circular profile boundary resolved to Center (179, -46)"
+      ],
+      "implementedAt": "2026-10-14T19:20:47.445Z"
+    },
+    {
+      "caseId": "snap-intersection",
+      "feedbackHash": "93fe2b8d977e1abbb9d04b38377bed5a6ce7ee9e91da44d59fb8626adc5848ab",
+      "summary": "Intersection acquisition verifies that projected edge candidates meet in modeled XYZ. Crossings caused only by illustrated depth are rejected; real coplanar crossings still acquire.",
+      "files": [
+        "interaction-lab/stage.js",
+        "interaction-lab/scene-precision.js",
+        "interaction-lab/test-precision-stage.js"
+      ],
+      "checks": [
+        "node interaction-lab/test-precision-stage.js: passed false projected top-edge crossing rejection, true base-plane intersection and large-coordinate separation checks",
+        "Existing stage regression suite passed"
+      ],
+      "implementedAt": "2026-10-14T19:20:47.445Z"
+    },
+    {
+      "caseId": "tracking-smarttrack",
+      "feedbackHash": "f24122571477e5a5e65468bbe3ee063c8ef6bb9f471012b765097f718b6cd597",
+      "summary": "Dwelled curve references inherit analytic ellipse tangents or polyline segment directions. Following a dotted guide acquires eligible finite geometry intersections with a distinct tracking marker.",
+      "files": [
+        "interaction-lab/stage.js",
+        "interaction-lab/tracking-guides.js",
+        "test-tracking-guides.js",
+        "interaction-lab/test-precision-stage.js"
+      ],
+      "checks": [
+        "node test-tracking-guides.js: 11 passed tangent, finite intersection, source exclusion, elevation and capture-radius checks",
+        "node interaction-lab/test-precision-stage.js: passed real stage dwell, guide intersection and acquisition event deduplication",
+        "Browser check: a circular boundary reference displayed an inherited diagonal tangent guide"
+      ],
+      "implementedAt": "2026-10-14T19:20:47.445Z"
+    },
+    {
+      "caseId": "tracking-ortho",
+      "feedbackHash": "86e2103a7ec36ed4f7c7a7fde72ce3723baa25f8d00986df0f79c59f0e640c6d",
+      "summary": "The Ortho study now uses 45-degree direction intervals by default and exposes Ortho angle increment for tuning. Explicit 90-degree behavior and Shift inversion remain available.",
+      "files": [
+        "interaction-lab/catalog.js",
+        "interaction-lab/model.js",
+        "interaction-lab/stage.js",
+        "interaction-lab/direction-constraint.js",
+        "interaction-lab/test-direction-constraint.js",
+        "interaction-lab/test-precision-stage.js"
+      ],
+      "checks": [
+        "node interaction-lab/test-direction-constraint.js: passed all-quadrant 45-degree projection, 90-degree compatibility and custom increments",
+        "node interaction-lab/test-precision-stage.js: passed 45/90-degree point placement and Shift inversion",
+        "Model suite passed catalog default and legacy preference migration checks",
+        "Browser inspector displayed Ortho angle increment 45"
+      ],
+      "implementedAt": "2026-10-14T19:20:47.445Z"
+    }
+  ]
+}

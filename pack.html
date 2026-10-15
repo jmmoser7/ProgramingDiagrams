@@ -411,7 +411,8 @@
     .stepper { display: inline-flex; align-items: center; gap: 8px; }
     .stepper .val { min-width: 75px; text-align: center; }
   </style>
-  <link rel="stylesheet" href="chrome.css">
+  <link rel="stylesheet" href="chrome.css?v=20261015-editor-tags-3">
+  <link rel="stylesheet" href="board-data-ui.css?v=20261015-editor-tags-3">
 </head>
 <body>
   <canvas id="board" aria-label="Packed spaces. Drag cards beside each other to rearrange. Right-click for controls."></canvas>
@@ -422,6 +423,7 @@
     </button>
     <span id="status" class="sub"></span>
     <span class="divider"></span>
+    <button id="src-data" class="btn" type="button" title="View and edit the program table and column tags" disabled>Edit data</button>
     <button hidden id="src-sample" class="btn sub" type="button" title="Reload the sample program">Sample</button>
   </div>
   <div id="empty" hidden>
@@ -463,14 +465,15 @@
   <div id="toast" class="cap" hidden></div>
   <input id="name-input" class="name-input" type="text" autocomplete="off" spellcheck="false" aria-label="Space name" hidden>
   <input id="file" type="file" accept=".csv,.xlsx,.xlsm,.zip,.json,text/csv" hidden>
-  <script src="appearance.js"></script>
-  <script src="engine.js"></script>
-  <script src="leaders.js"></script>
-  <script src="mode-state.js"></script>
-  <script src="pack-engine.js?v=7"></script>
-  <script src="program-seed.js"></script>
-  <script src="chrome.js"></script>
-  <script src="pack.js?v=20"></script>
-  <script src="display-mode.js?v=2"></script>
+  <script src="appearance.js?v=20261015-editor-tags-3"></script>
+  <script src="engine.js?v=20261015-editor-tags-3"></script>
+  <script src="leaders.js?v=20261015-editor-tags-3"></script>
+  <script src="mode-state.js?v=20261015-editor-tags-3"></script>
+  <script src="pack-engine.js?v=20261015-editor-tags-3"></script>
+  <script src="program-seed.js?v=20261015-editor-tags-3"></script>
+  <script src="chrome.js?v=20261015-editor-tags-3"></script>
+  <script src="board-data-ui.js?v=20261015-editor-tags-3"></script>
+  <script src="pack.js?v=20261015-editor-tags-3"></script>
+  <script src="display-mode.js?v=20261015-editor-tags-3"></script>
 </body>
 </html>

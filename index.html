@@ -785,15 +785,17 @@
       pointer-events: none;
     }
   </style>
-  <link rel="stylesheet" href="chrome.css">
+  <link rel="stylesheet" href="chrome.css?v=20261015-editor-tags-3">
+  <link rel="stylesheet" href="board-data-ui.css?v=20261015-editor-tags-3">
 </head>
-<body>
+<body class="board-mode">
   <canvas id="board"></canvas>
   <div id="src" class="cap row">
     <button id="src-open" class="btn file" type="button" title="Open a spreadsheet (.csv, .xlsx), a saved .zip, or a spreadsheet and its .layout.json together, or drop them on the board. The spreadsheet itself is never changed.">
       <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5h4l2.5 2.5v6.5h-6.5z M7 1.5v2.5h2.5" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>
       <span id="src-name"></span>
     </button>
+    <button id="src-data" class="btn" type="button" aria-label="CSV editor" title="Open the editable data table and column tags" aria-haspopup="dialog" aria-expanded="false">Edit data</button>
     <span id="status" class="sub"></span>
     <span id="src-div" class="divider"></span>
     <button id="src-sample" class="btn sub" type="button" title="Reload the sample program">Sample</button>
@@ -807,13 +809,20 @@
   <div id="toolbar" class="cap bar">
     <div id="tools" class="segs" role="radiogroup" aria-label="Tool">
       <button class="seg on" type="button" data-tool="select" title="Select (V)">Select</button>
+      <span class="divider" aria-hidden="true"></span>
       <button class="seg" type="button" data-tool="line" title="Draw (D or L): straight lines, click-click or drag. Shift 45°, Tab locks direction, type a length, [ ] width">Draw</button>
+      <span class="divider" aria-hidden="true"></span>
       <button class="seg" type="button" data-tool="text" title="Type (Y or T): click to type, drag to set a width">Type</button>
     </div>
     <span class="divider"></span>
     <button id="tb-grid" class="btn" type="button" title="Grid (G)">Grid</button>
+    <span class="divider" aria-hidden="true"></span>
     <button id="tb-fit" class="btn" type="button" title="Fit viewport (F)">Fit viewport</button>
+    <span class="divider" aria-hidden="true"></span>
+    <button id="tb-bookmarks" class="btn" type="button" title="Save and restore named board snapshots" aria-expanded="false">Bookmarks</button>
+    <span class="divider" aria-hidden="true"></span>
     <button id="tb-save" class="btn" type="button" title="Save the spreadsheet and layout as one .zip (Ctrl+S)">Save</button>
+    <span class="divider" aria-hidden="true"></span>
     <button id="tb-export" class="btn" type="button" title="Export">Export</button>
     <span class="divider"></span>
     <button id="tb-display" class="btn" type="button" title="Switch between Board, Pack, and Isometric">Display mode</button>
@@ -854,14 +863,18 @@
   <span id="sf-unit" class="sf-unit" aria-hidden="true" hidden>sf</span>
   <input id="file" type="file" accept=".zip,.csv,.xlsx,.xlsm,.json,application/zip,text/csv,application/json" multiple hidden>
   <script id="seed" type="text/plain"></script>
-  <script src="blob.js"></script>
-  <script src="appearance.js"></script>
-  <script src="engine.js"></script>
-  <script src="leaders.js"></script>
-  <script src="mode-state.js"></script>
-  <script src="program-seed.js"></script>
-  <script src="chrome.js"></script>
-  <script src="app.js"></script>
-  <script src="display-mode.js?v=2"></script>
+  <script src="blob.js?v=20261015-editor-tags-3"></script>
+  <script src="appearance.js?v=20261015-editor-tags-3"></script>
+  <script src="engine.js?v=20261015-editor-tags-3"></script>
+  <script src="leaders.js?v=20261015-editor-tags-3"></script>
+  <script src="mode-state.js?v=20261015-editor-tags-3"></script>
+  <script src="program-seed.js?v=20261015-editor-tags-3"></script>
+  <script src="chrome.js?v=20261015-editor-tags-3"></script>
+  <script src="board-group-bundle.js?v=20261015-editor-tags-3"></script>
+  <script src="board-transition.js?v=20261015-editor-tags-3"></script>
+  <script src="board-data-ui.js?v=20261015-editor-tags-3"></script>
+  <script src="board-bookmarks.js?v=20261015-editor-tags-3"></script>
+  <script src="app.js?v=20261015-editor-tags-3"></script>
+  <script src="display-mode.js?v=20261015-editor-tags-3"></script>
 </body>
 </html>

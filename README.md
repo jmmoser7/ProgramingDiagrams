@@ -1,5 +1,34 @@
 # Program board
 
+Licensed under the [MIT License](LICENSE). Vendored Rhino assets retain their
+[third-party license notices](vendor/rhino3dm-LICENSE.txt).
+
+## Drag feel bench
+
+Open [drag-feel.html](drag-feel.html) for a focused four-block bench using the board's solid collision engine. Tune the block buffer, smoothness, friction, inertia, magnetic grid and neighbor snapping, contact response, and the resistance and release of pressure climbing while dragging. Presets and an A/B comparison help find a firmer, tactile feel. Settings save independently on this device and can be imported or exported for comparison; the bench does not change the program board's settings or data.
+
+Scroll over a block to zoom around the pointer, or use the **− / + / Fit** controls (50–600%). Middle-drag, right-drag, or Space-drag pans. With the canvas focused, `+` / `−` zoom and `0` fits the playground. Dragging off a support drops the held block to the next lower support or ground during the same drag; releasing is not required.
+
+**Minimum climb pressure** gates climbing: staying below it cannot eventually trigger a jump. After **Pressure dead travel**, pulling farther into a neighboring block toward center alignment increases live push pressure and builds the give progress faster. The pressure meter marks the minimum and shows give progress separately; easing off drains that progress.
+
+Hold **Ctrl** while dragging to keep neighboring blocks fixed, matching sticky-note isolation. Press or release Ctrl during a drag to switch immediately between isolated motion and pushing. Solid contact, buffer spacing, pressure climbing, and support carriage still apply.
+
+Mouse grabs clamp firmly to the exact picked surface point, including side faces. The visible cursor stays on that point through snapping, zoom, climbing, and falling. Further physical mouse travel into a blocked surface becomes bounded pressure, so it cannot accumulate a large jump when the block gives way. Held mouse motion uses direct swept contact; response/damping tune the arrow-key spring experiment, while friction and inertia tune release. Contact feedback flashes without deforming the blocks.
+
+Hover vertices and edge midpoints to preview a precise grip; square and triangle markers identify the accepted feature. **Grip capture radius** stays in screen pixels through zoom. Hold **Alt** when grabbing to choose any surface point, even near a feature, or turn off **Feature grips**. **Grab-side bias** favors snapping features near the held point over features across the block. Object features take priority over grid magnets, and blocks also align to corners and midpoints on the support beneath them. These cues follow the interaction study’s explicit feature/owner feedback contract.
+
+## Interaction laboratory
+
+Open [interaction-lab.html](interaction-lab.html) for **Feel**, a reusable Rhino / Atlas interaction workbench with 48 studies, synthetic geometry, cursor and timing controls, inherited document/category/prototype/group/object tuning, multiselect editing, written observations, and workspace import/export. It opens directly in Chrome or Edge without installation. For an optional localhost preview, run `node serve-interaction-lab.js` and open `http://127.0.0.1:8787/interaction-lab.html`.
+
+Read the [categorized research report](docs/interaction-language/README.md) and [coverage matrix](docs/interaction-language/coverage.md). Research includes McNeel primary documentation, both supplied Atlas reports, and read-only observations of the running Rhino 8 SR30 instance. Browser studies and native behavior are explicitly distinguished. The lab has its own local workspace and does not use the board's program data.
+
+Use capsule **Commit / Update** buttons or the sidebar batch commit to accept preferences and submit saved observations plus the current written draft. Neutral means **Unaltered**; amber means **Altered** or **Feedback pending**; green means **Locked in** or **Settings applied**. The local background worker validates and publishes numeric/style presets. Written feedback stays pending until an implementation receipt matching its exact content records the change, files, checks, and date; only then can the capsule show purple **Addressed**. Further tweaks or note changes return it to Altered. The worker applies supported settings; it does not author code from comments. Shift-click selects a range; Ctrl-click toggles studies. The Cursor section includes searchable icon menus for all 36 standard cursor presentations and seven geometry hover styles.
+
+The originating Codex chat has a configured **Implement interaction lab feedback** follow-up, now **paused at the user’s request** (14 Oct 2026). When active, it checks every five minutes. It reads committed requests, implements clear changes within the lab, and records verified results. Keep Codex running and the computer on; manage the follow-up in Codex Scheduled. `node interaction-lab/feedback-inbox.js` prints the current pending requests without changing any data. See [the feedback workflow](docs/interaction-language/README.md#background-application-laboratory-prototypes-only).
+
+In the sub-selection studies, Ctrl+Shift hover and selection highlight only the targeted face, edge, or vertex. Every sub-selection study also supports individual polyline segments, including the Sub-objects filter study.
+
 A portable infinite-canvas diagram for building programs.
 
 Open `index.html` in Chrome or Edge. No install and no server. Drop a CSV, Excel spreadsheet, or saved board onto the empty canvas to begin. The repository includes a synthetic example at `fixtures/program.csv` for trying the tools.
@@ -28,6 +57,14 @@ Each sticky's name is fitted to that sticky, in feet: wrapped, centred, and size
 The spreadsheet you load is never modified. Export and Save make new files. Outside labels override the fitted in-cell name only when the Leaders threshold is enabled and a side-column slot is available.
 
 ## Data
+
+In Board, Pack, and Isometric modes, **Edit data** in the CSV capsule opens **Program data**, a floating editable table. Search rows, edit cells, and use **+ Column** to add fields. Header pills show the detected **Area** and **Group** tags. Click a header's tag control to change these choices, tag several grouping columns, or choose **None** to clear that column's interpretation. Table edits update the program and participate in Undo; zero-area rows remain editable. **Commit** finishes the current edit, saves the program state on this device, and closes the editor. Invalid values stay highlighted for correction.
+
+Tag a count column as **Submodules** to divide each sticky into that exact number of bounded cells. Tag two columns as **Module width** and **Module depth** (feet) for a base module. The lock toggle sits inside each module tag capsule; both dimensions share the same setting. **Hard** keeps every module dimension exact and lets the displayed footprint area adjust. **Loose** also uses exact modules with the global grid off; with it on, the full footprint scales to whole primary-grid increments. The source area remains recorded in the table and exports. Subdivisions follow resizing and are included in Board PNG/SVG exports.
+
+The context menu's **Bundle** capsule offers **All** and **By group**. By group compacts siblings using the tagged group columns, temporarily ignores other groups during that pass, then positions the compact clusters together with collisions restored. Authored rigid groups retain their offsets. Outside labels are controlled by **Leaders** in the board's Text menu.
+
+**Bookmarks** opens a capsule stack of named complete Board snapshots, including data, column tags, layout, appearance, camera, grid, and selection. The circular **+** at its right saves an arrangement. Click anywhere on a named capsule to restore it with an eased transition; **Delete** remains a separate inset capsule. Use the pencil, double-click the name, or press F2 to rename. Reduced-motion preferences skip the animation. The current bookmark catalog survives a restore and travels with saved layouts/ZIPs. Creation is limited to 30 bookmarks; imported catalogs are retained in full.
 
 The repository starts with empty seeds and contains no client spreadsheet. Private local data belongs in ignored `sample.csv` or `.local/`; do not embed it in tracked source. `fixtures/program.csv` contains synthetic data used by the regression tests. `node build-netlify.js` also empties both runtime seeds in `dist/` and checks the published files for client data.
 

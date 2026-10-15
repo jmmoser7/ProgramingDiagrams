@@ -236,6 +236,9 @@
   let leaderScene = { items: [], hidden: 0, hiddenIds: [] };
   const groupScratch = [];
   let pop = null; // the one open menu or popover: { el, anchor }
+  let dataDashboard = null;
+  let bookmarksPanel = null;
+  let bookmarkTransition = null;
   let dataOpen = false;
   let dataKey = '';
   let dataIds = [];
@@ -457,6 +460,7 @@
   }
 
   function resize() {
+    finishBookmarkTransition(false);
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     viewW = window.innerWidth;
     viewH = window.innerHeight;
@@ -797,6 +801,8 @@
     textGen += 1;
     labels.clear();
     touchList();
+    dataDashboard?.refresh();
+    bookmarksPanel?.refresh();
   }
 
   // The buffer is a whole number of grid steps, and fudging draws whole
@@ -807,7 +813,7 @@
     const gap = model.bufferMul * view.gridStep;
     const before = model.gap;
     const grid = model.grid;
-    const changed = engine.setParams(model, gap, model.fudge && view.grid ? view.gridStep : 0, view.gridStep);
+    const changed = engine.setParams(model, gap, model.fudge && view.grid ? view.gridStep : 0, view.gridStep, view.grid);
     if (changed.length) textGen += 1;
     return changed.length > 0 || before !== gap || grid !== model.grid;
   }
@@ -824,6 +830,9 @@
   }
 
   function install(next) {
+    finishBookmarkTransition(false);
+    dataDashboard?.close();
+    bookmarksPanel?.close();
     closeData();
     endChromeEdits(false);
     cancelDraft();
@@ -853,12 +862,10 @@
     syncChrome();
   }
 
-  // A snapshot holds the board and the grid, because the grid sets the
-  // buffer and the fudge cell: undoing a grid change restores both. The
-  // custom swatch lists ride along so a right-click removal undoes, and the
-  // board's type defaults (face, size, ink) so the canvas Text menu does.
+  // Snapshots include the complete view and selection as well as the model,
+  // so bookmarks and Undo restore the same board settings and viewport.
   function snapshot() {
-    return JSON.stringify({ board: engine.capture(model), grid: view.grid, gridStep: view.gridStep, custom: view.custom, text: [view.face, view.textScale, view.textColor], leaderThreshold: view.leaderThreshold });
+    return JSON.stringify({ board: engine.capture(model), view, camera, selection: [...selected], selLines: [...selLines], selTexts: [...selTexts], tool });
   }
 
   function checkpoint() {
@@ -878,19 +885,27 @@
   }
 
   function restoreSnap(snap) {
+    finishBookmarkTransition(false);
     const keep = Array.from(selected);
     const keepLines = Array.from(selLines);
     const keepTexts = Array.from(selTexts);
     endChromeEdits(false);
     cancelDraft();
     finishTextEdit(false);
+    finishNameEdit(false);
+    finishAreaEdit(false);
+    clearDragFlags();
+    drag = null;
     editGen += 1;
     const data = JSON.parse(snap);
-    view.grid = !!data.grid;
-    view.gridStep = data.gridStep > 0 ? data.gridStep : view.gridStep;
-    view.leaderThreshold = Number.isFinite(data.leaderThreshold) ? Math.max(0, Math.min(120, data.leaderThreshold)) : 0;
-    if (data.custom) view.custom = normalizeView({ custom: data.custom }).custom;
     const faceWas = view.face;
+    if (data.view) view = normalizeView(data.view);
+    if (data.camera) camera = {...data.camera};
+    if (data.grid !== undefined) view.grid = !!data.grid;
+    view.gridStep = data.gridStep > 0 ? data.gridStep : view.gridStep;
+    if (Number.isFinite(data.leaderThreshold)) view.leaderThreshold = Math.max(0, Math.min(120, data.leaderThreshold));
+    else if (!data.view) view.leaderThreshold = 0;
+    if (data.custom) view.custom = normalizeView({ custom: data.custom }).custom;
     if (data.text) {
       const tv = normalizeView({ face: data.text[0], textScale: data.text[1], textColor: data.text[2] });
       view.face = tv.face;
@@ -899,13 +914,15 @@
     }
     model = engine.restore(data.board);
     if (!model.frame) engine.frameAround(model);
+    camera.z = clampZoom(camera.z);
     syncParams();
     modelChanged();
     syncSwatchRows();
     if (view.face !== faceWas) useFace(view.face);
     const lineIds = new Set(model.lines.map((l) => l.id));
     const textIds = new Set(model.texts.map((t) => t.id));
-    setSelection(stickiesFor(keep).map((s) => s.id), keepLines.filter((id) => lineIds.has(id)), keepTexts.filter((id) => textIds.has(id)));
+    setSelection(stickiesFor(data.selection || keep).map((s) => s.id), (data.selLines || keepLines).filter((id) => lineIds.has(id)), (data.selTexts || keepTexts).filter((id) => textIds.has(id)));
+    if (data.tool) tool = data.tool;
     bundling = null;
     settling = null;
     syncChrome();
@@ -940,8 +957,9 @@
   let sharedBase = null;
   let pendingShared = null;
   function sharedState() { return model ? {board:engine.capture(model),camera:{...camera},view:JSON.parse(JSON.stringify(view)),ephemeral:EPHEMERAL||undefined} : null; }
-  function sharedBusy() { return !!(drag || bundling || settling || nameEdit || areaEdit || textEdit || dimEdit || titleEditing || document.activeElement?.closest('input,textarea,[contenteditable]')); }
+  function sharedBusy() { return !!(bookmarkTransition || drag || bundling || settling || nameEdit || areaEdit || textEdit || dimEdit || titleEditing || dataDashboard?.hasPendingEdits() || document.activeElement?.closest('input,textarea,[contenteditable]')); }
   function acceptShared(state) {
+    finishBookmarkTransition(false);
     const keep=[...selected], keepLines=[...selLines], keepTexts=[...selTexts], oldFace=view.face, oldFile=model?.fileName;
     model=engine.restore(state.board);view=normalizeView(state.view);
     if(!model.frame && engine.alive(model).length)engine.frameAround(model);
@@ -952,10 +970,55 @@
     syncChrome();syncSwatchRows();if(view.face!==oldFace)useFace(view.face);kick();
   }
   function flushEdits() {
+    if (dataDashboard?.commitActive() === false) throw new Error('Correct the highlighted table value before continuing.');
     blurData();finishNameEdit(true);finishAreaEdit(true);finishTextEdit(true);endChromeEdits(true);
     const active=document.activeElement;if(active && active!==document.body && typeof active.blur==='function')active.blur();
-    stopSettle();bundling=null;
+    finishBoardMotion();
     persist();return sharedState();
+  }
+
+  function finishBoardMotion() {
+    finishBookmarkTransition(true);
+    if (!model || (!bundling && !settling)) return;
+    clearDragFlags();
+    if (bundling?.kind === 'groups') {
+      const bounds = engine.boundsOf(live());
+      for (let i = 0; i < 850 && !bundling.state.done; i++) {
+        window.ProgramGroupBundle.step(bundling.state, {pull: 0.18, maxPush: Math.max(9, Math.max(bounds.w, bounds.h) / 80)});
+      }
+    } else if (bundling) engine.bundle(model, bundling.ids);
+    bundling = null;
+    settling = null;
+    const result = engine.settleNow(model);
+    lastJam = result.jam;
+    if (lastJam) toast(jamText(lastJam));
+    kick();
+  }
+
+  function finishBookmarkTransition(repaint) {
+    if (!bookmarkTransition) return;
+    bookmarkTransition = null;
+    touchList();
+    labels.clear();
+    persistSoon();
+    if (repaint && model) draw();
+    kick();
+  }
+
+  function presentedState() {
+    const presentation = bookmarkTransition?.plan;
+    return {board: engine.capture(presentation?.model || model), camera: {...(presentation?.camera || camera)}, view: {...view}};
+  }
+
+  function animateBookmark(from, surface) {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const board = engine.capture(model);
+    board.bookmarks = [];
+    const plan = window.ProgramBoardTransition.create(from, engine.restore(board), camera);
+    plan.apply(0);
+    bookmarkTransition = {plan, start: performance.now(), eased: 0,
+      surface: plan.needsCrossfade || from.view.background !== view.background ? surface : null};
+    kick();
   }
 
   function persist() {
@@ -1261,6 +1324,7 @@
       } else {
         c.fillRect(s.x, s.y, s.w, s.h);
       }
+      paintModules(c, s, z, r);
       // A stroke is drawn inside the edge, so the box never grows.
       const sw = s.stroke > 0 ? Math.min(s.stroke, Math.min(s.w, s.h) * 0.5) : px;
       c.lineWidth = sw;
@@ -1290,6 +1354,24 @@
       }
       paintLabel(c, s, e, k, tx, ty);
     }
+  }
+
+  function paintModules(c, sticky, z, radius) {
+    const layout = engine.moduleLayout(model, sticky);
+    if (!layout?.lines.length) return;
+    c.save();
+    c.beginPath();
+    c.roundRect(sticky.x, sticky.y, sticky.w, sticky.h, radius);
+    c.clip();
+    c.lineWidth = 0.65 / z;
+    c.strokeStyle = isDark(stickyFill(sticky)) ? 'rgba(255,255,255,0.25)' : 'rgba(50,42,32,0.22)';
+    c.beginPath();
+    layout.lines.forEach(line => {
+      c.moveTo(sticky.x + line.x1, sticky.y + line.y1);
+      c.lineTo(sticky.x + line.x2, sticky.y + line.y2);
+    });
+    c.stroke();
+    c.restore();
   }
 
   // The fill, darkened: a stroke reads as the sticky's own edge.
@@ -1386,6 +1468,29 @@
   }
 
   function draw() {
+    if (!bookmarkTransition) { drawScene(); return; }
+    const transition = bookmarkTransition;
+    const canonical = {model, camera, list: liveList};
+    model = transition.plan.model;
+    camera = transition.plan.camera;
+    liveList = engine.alive(model);
+    try {
+      drawScene();
+      if (transition.surface) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1 - transition.eased;
+        ctx.drawImage(transition.surface, 0, 0);
+        ctx.restore();
+      }
+    } finally {
+      model = canonical.model;
+      camera = canonical.camera;
+      liveList = canonical.list;
+    }
+  }
+
+  function drawScene() {
     preparedColors = window.ProgramAppearance.prepare(model);
     const z = camera.z;
     const ox = viewW * 0.5 - camera.x * z;
@@ -1430,7 +1535,7 @@
       blobMs = 0;
       return blobList;
     }
-    const moving = !!(drag && drag.moved) || !!settling || !!bundling;
+    const moving = !!bookmarkTransition || !!(drag && drag.moved) || !!settling || !!bundling;
     const t0 = performance.now();
     blobList = moving ? blobCache.update(model, BLOB_REBUILDS, BLOB_BUDGET_MS) : blobCache.update(model);
     blobMs = performance.now() - t0;
@@ -2038,12 +2143,21 @@
     }
     const t0 = performance.now();
     let busy = false;
-    if (drag && drag.moved && (drag.kind === 'move' || drag.kind === 'resize')) {
+    if (bookmarkTransition) {
+      const progress = (now - bookmarkTransition.start) / 480;
+      bookmarkTransition.eased = bookmarkTransition.plan.apply(progress);
+      if (progress >= 1) finishBookmarkTransition(false);
+      else busy = true;
+    } else if (drag && drag.moved && (drag.kind === 'move' || drag.kind === 'resize')) {
       engine.step(model, dragStepOpts(lastBusyAt ? now - lastBusyAt : 0));
       busy = true;
     } else if (drag && drag.moved && drag.kind === 'grip') {
       // What the swinging end carried settles against its neighbours.
       engine.step(model, { iters: 6, contactEase: 1, maxPush: Math.max(maxPush, 3), drag: false });
+      busy = true;
+    } else if (bundling?.kind === 'groups') {
+      const progress = window.ProgramGroupBundle.step(bundling.state, {pull: BUNDLE_PULL, maxPush: Math.max(2, BUNDLE_SCREEN_PUSH / camera.z)});
+      if (progress.done) endBundle();
       busy = true;
     } else if (bundling) {
       const ease = Math.min(1, (bundling.frames + 1) / BUNDLE_EASE_IN);
@@ -2156,6 +2270,7 @@
   // --------------------------------------------------------------- actions
 
   function bundle(all) {
+    if (dataDashboard?.commitActive() === false) return;
     let ids = [];
     if (!all && selected.size) {
       ids = expanded();
@@ -2168,6 +2283,20 @@
     closePop();
     checkpoint();
     startBundle(ids);
+  }
+
+  function bundleByGroup() {
+    if (!model) return;
+    if (dataDashboard?.commitActive() === false) return;
+    clearDragFlags();
+    const state = window.ProgramGroupBundle.begin(engine, model);
+    if (!state.grouped) { toast('Tag a grouping column in the data viewer to cluster siblings.'); return; }
+    closePop();
+    checkpoint();
+    settling = null;
+    bundling = {kind: 'groups', state};
+    toast('Clustering ' + state.grouped + ' sibling groups.');
+    kick();
   }
 
   function startBundle(ids) {
@@ -2487,6 +2616,7 @@
 
   function showPop(node, anchor) {
     pop = { el: node, anchor: anchor };
+    if (anchor?.hasAttribute('aria-expanded')) anchor.setAttribute('aria-expanded', 'true');
     node.hidden = false;
   }
 
@@ -2494,6 +2624,7 @@
     hideBlobTip();
     if (!pop) return;
     const node = pop.el;
+    if (pop.anchor?.hasAttribute('aria-expanded')) pop.anchor.setAttribute('aria-expanded', 'false');
     pop = null;
     if (dataDocked) closeData();
     if (node.contains(document.activeElement)) document.activeElement.blur();
@@ -2638,7 +2769,8 @@
     const text = dropdown('Text', null, () => textRows(() => stickiesFor(expanded()), true));
     if (onLabel) text.set(true);
     menuItem('Duplicate', 'Ctrl D', duplicateSelection);
-    if (bodyCount(list) >= 2) menuItem('Bundle', 'B', () => bundle(false));
+    if (bodyCount(list) >= 2) menuItem('Bundle selection', 'B', () => bundle(false));
+    bundleMenuRow();
     const one = isOneGroup(list);
     if (canGroup(list)) menuItem('Group', 'Ctrl G', groupSelection);
     if (list.some((s) => s.group)) menuItem('Ungroup', one ? 'Ctrl G' : 'Ctrl Shift G', ungroupSelection);
@@ -2653,7 +2785,7 @@
   function boardMenu(onFrame) {
     blobsDropdown();
     boardTextDropdown();
-    menuItem('Bundle all', 'B', () => bundle(true));
+    bundleMenuRow();
     if (onFrame) menuItem('Rename frame', null, startTitleEdit);
     if (onFrame) swatchRow('Frame', 'frame', FRAME_COLORS, frameFill, setFrameColor, applyFrameColor);
     swatchRow('Background', 'background', BACKGROUNDS, () => view.background, setBackground, null);
@@ -2678,6 +2810,15 @@
         kick();
       });
     });
+  }
+
+  function bundleMenuRow() {
+    const row = addRow(el('div', 'cap row spread'));
+    row.appendChild(el('span', null, 'Bundle'));
+    const actions = el('span', 'segs');
+    actions.appendChild(button('seg', 'All', () => bundle(true)));
+    actions.appendChild(button('seg', 'By group', bundleByGroup));
+    row.appendChild(actions);
   }
 
   function frameMenu() {
@@ -3223,6 +3364,7 @@
     const wasOn = view.leaderThreshold > 0;
     view.leaderThreshold = Math.max(0, Math.min(120, Number(value) || 0));
     if (wasOn !== (view.leaderThreshold > 0)) fit();
+    syncChrome();
     persistSoon();
     kick();
   }
@@ -4344,6 +4486,8 @@
   // (Firefox, Safari, some file:// hosts) the zip downloads instead.
   async function saveBoard() {
     if (!model) return;
+    if (dataDashboard?.commitActive() === false) return;
+    finishBoardMotion();
     endChromeEdits(true);
     if (typeof window.showSaveFilePicker === 'function' && !fileHandle) {
       try {
@@ -4425,7 +4569,7 @@
     syncSave();
     // Until something loads, only the drop zone and the file pill work.
     emptyEl.hidden = !!model;
-    [gridBtn, $('tb-fit'), saveBtn, exportBtn].forEach((b) => { b.disabled = !model; });
+    [gridBtn, $('tb-fit'), saveBtn, exportBtn, $('src-data'), $('tb-bookmarks')].forEach((b) => { b.disabled = !model; });
     toolSegs.querySelectorAll('[data-tool]').forEach((seg) => { seg.disabled = !model; });
     $('src-sample').hidden = $('src-div').hidden = !seedText;
     if (model) {
@@ -4582,6 +4726,8 @@
     exportPop.addEventListener('click', (event) => {
       const kind = event.target.dataset && event.target.dataset.export;
       if (!kind) return;
+      if (dataDashboard?.commitActive() === false) return;
+      finishBoardMotion();
       if (kind === '3dm') {
         export3dm(event.target);
         return;
@@ -4604,6 +4750,86 @@
       fileInput.value = '';
       loadFiles(files);
     });
+    wireBoardPanels();
+  }
+
+  function wireBoardPanels() {
+    dataDashboard = window.ProgramDataDashboard.create({
+      button: $('src-data'), getModel: () => model, engine,
+      onEdit: ({rowIndex, key, value}) => {
+        finishBoardMotion();
+        const before = snapshot();
+        const changed = engine.editRowField(model, rowIndex, key, value);
+        if (!changed) return;
+        pushUndo(before);
+        modelChanged();
+        colGen += 1;
+        if (!model.frame) engine.frameAround(model);
+        settle([]);
+        syncChrome(); persistSoon(); kick();
+      },
+      onAddColumn: name => {
+        finishBoardMotion();
+        const before = snapshot();
+        engine.ensureColumn(model, name);
+        pushUndo(before);
+        modelChanged(); colGen += 1;
+        persistSoon(); kick();
+      },
+      onRoles: config => {
+        finishBoardMotion();
+        const before = snapshot();
+        engine.setColumnRoles(model, config);
+        pushUndo(before);
+        modelChanged(); colGen += 1;
+        syncParams(); settle([]);
+        persistSoon(); kick();
+      },
+      onCommit: () => {
+        flushEdits();
+        toast('Data committed.');
+      },
+    });
+    bookmarksPanel = window.ProgramBookmarks.create({
+      button: $('tb-bookmarks'),
+      getBookmarks: () => model?.bookmarks || [],
+      setBookmarks: list => { checkpoint(); model.bookmarks = list; persistSoon(); kick(); },
+      getState: () => {
+        flushEdits();
+        const state = JSON.parse(snapshot());
+        delete state.board.bookmarks;
+        return state;
+      },
+      restoreState: state => {
+        if (dataDashboard.close() === false) throw new Error('Correct the highlighted table value before restoring a bookmark.');
+        closeData();
+        const from = presentedState();
+        const surface = document.createElement('canvas');
+        surface.width = canvas.width; surface.height = canvas.height;
+        surface.getContext('2d').drawImage(canvas, 0, 0);
+        flushEdits();
+        const catalog = model.bookmarks;
+        checkpoint();
+        state.board.bookmarks = catalog;
+        restoreSnap(JSON.stringify(state));
+        animateBookmark(from, surface);
+        toast('Bookmark restored. Ctrl+Z returns to the previous board.');
+      },
+    });
+    $('src-data').addEventListener('click', () => {
+      if (!dataDashboard.isOpen()) finishBoardMotion();
+      closePop(); bookmarksPanel.close();
+    }, true);
+    $('tb-bookmarks').addEventListener('click', event => {
+      if (dataDashboard.close() === false) { event.stopImmediatePropagation(); return; }
+      closePop();
+    }, true);
+    $('tb-display').addEventListener('click', event => {
+      if (dataDashboard.commitActive() === false) {
+        event.stopImmediatePropagation();
+        toast('Correct the highlighted table value before switching views.');
+      }
+    }, true);
   }
 
   // ---------------------------------------------------------------- export
@@ -5001,6 +5227,13 @@
       const rx = r > 0 ? '" rx="' + num2(r) : '';
       out.push('<rect x="' + num2(s.x) + '" y="' + num2(s.y) + '" width="' + num2(s.w) + '" height="' + num2(s.h) + rx
         + '" fill="' + fill + '" stroke="#322a20" stroke-opacity="0.2" stroke-width="1" vector-effect="non-scaling-stroke"/>');
+      const modules = engine.moduleLayout(model, s);
+      if (modules?.lines.length) {
+        const clip = 'module-clip-' + i;
+        out.push('<defs><clipPath id="' + clip + '"><rect x="' + num4(s.x) + '" y="' + num4(s.y) + '" width="' + num4(s.w) + '" height="' + num4(s.h) + '" rx="' + num4(r) + '"/></clipPath></defs>');
+        const path = modules.lines.map(l => 'M' + num4(s.x + l.x1) + ' ' + num4(s.y + l.y1) + 'L' + num4(s.x + l.x2) + ' ' + num4(s.y + l.y2)).join('');
+        out.push('<path class="module-cells" d="' + path + '" clip-path="url(#' + clip + ')" fill="none" stroke="' + (isDark(fill) ? '#ffffff' : '#322a20') + '" stroke-opacity="0.22" stroke-width="0.65" vector-effect="non-scaling-stroke"/>');
+      }
       if (s.stroke > 0) {
         const sw = Math.min(s.stroke, Math.min(s.w, s.h) * 0.5);
         const h = sw / 2;
@@ -5080,6 +5313,7 @@
   async function loadFiles(list) {
     const files = Array.from(list || []);
     if (!files.length) return;
+    if (dataDashboard?.commitActive() === false) return;
     try {
       const zipFile = files.find((f) => fileKind(f) === 'zip');
       let parts;
@@ -5229,6 +5463,7 @@
   }
 
   function onPointerDown(event) {
+    finishBookmarkTransition(true);
     if (!model) return;
     if (swallowClick) {
       swallowClick = false;
@@ -5365,7 +5600,7 @@
     const anchor = blob
       ? engine.boundsOf(hit.members)
       : kind === 'sticky'
-        ? { x: item.x, y: item.y, w: item.w, h: item.h }
+        ? { x: item.x, y: item.y, w: item.w, h: item.h, sticky: item }
         : kind === 'line'
           ? { x: item.points[0][0], y: item.points[0][1], w: 0, h: 0 }
           : { x: item.x, y: item.y, w: 0, h: 0 };
@@ -5597,7 +5832,22 @@
     }
     if (drag.axis === 'x') dy = 0;
     if (drag.axis === 'y') dx = 0;
-    if (view.grid) {
+    let module = drag.anchor.sticky && engine.moduleForSticky(model, drag.anchor.sticky);
+    let moduleAnchor = drag.anchor;
+    if (module?.lock !== 'hard') {
+      const item = drag.items.find(entry => engine.moduleForSticky(model, entry.s)?.lock === 'hard');
+      if (item) {
+        module = engine.moduleForSticky(model, item.s);
+        moduleAnchor = {x: item.x, y: item.y, w: item.s.w, h: item.s.h};
+      }
+    }
+    if (module?.lock === 'hard') {
+      const a = moduleAnchor;
+      const snapX = engine.snapDelta(a.x + dx, a.y + dy, a.w, a.h, module.width);
+      const snapY = engine.snapDelta(a.x + dx, a.y + dy, a.w, a.h, module.depth);
+      if (drag.axis !== 'y') dx += snapX.dx;
+      if (drag.axis !== 'x') dy += snapY.dy;
+    } else if (view.grid) {
       const a = drag.anchor;
       const snap = engine.snapDelta(a.x + dx, a.y + dy, a.w, a.h, view.gridStep);
       if (drag.axis !== 'y') dx += snap.dx;
@@ -5634,6 +5884,8 @@
       step: view.grid ? view.gridStep : 0,
       cell: model.cell,
       wall: innerWall(),
+      module: engine.moduleForSticky(model, s),
+      gridActive: view.grid,
     });
     s.x = r.x;
     s.y = r.y;
@@ -6332,6 +6584,7 @@
   }
 
   function onDoubleClick(event) {
+    finishBookmarkTransition(true);
     if (!model || tool !== 'select') return;
     const p = s2w(event.clientX, event.clientY);
     const t = hitText(p.x, p.y);
@@ -6357,6 +6610,7 @@
   }
 
   function onWheel(event) {
+    finishBookmarkTransition(true);
     event.preventDefault();
     if (!model) return;
     if (pop && pop.el === menuEl) closePop();
@@ -6371,6 +6625,8 @@
 
   function escape() {
     if (closeSwatchAsk()) return;
+    if (dataDashboard?.isOpen()) { dataDashboard.close(); return; }
+    bookmarksPanel?.close();
     if (pop) closePop();
     else if (dataOpen) closeData();
     else if (tool !== 'select') setTool('select');
@@ -6389,6 +6645,7 @@
 
   function onKeyDown(event) {
     if (typing(event) || !model) return;
+    finishBookmarkTransition(true);
     const key = event.key.toLowerCase();
     noteMods(event);
     if (key === 'shift' || key === 'control' || key === 'meta' || key === 'alt') {
@@ -6460,6 +6717,7 @@
   // A press outside the open menu or popover closes it. A left press that
   // only dismisses the context menu does nothing else.
   function onAnyPointerDown(event) {
+    if (!event.target.closest?.('#board-bookmarks')) finishBookmarkTransition(true);
     if (!pop || pop.el.contains(event.target) || (pop.anchor && pop.anchor.contains(event.target))) return;
     const wasMenu = pop.el === menuEl;
     closePop();
@@ -6585,6 +6843,10 @@
       },
       openData: () => openData(false),
       bundle: (all) => bundle(!!all),
+      bundleByGroup,
+      get dataDashboard() { return dataDashboard; },
+      get bookmarksPanel() { return bookmarksPanel; },
+      get transitioning() { return !!bookmarkTransition; },
       perfStats: perfStats,
       perfReset: () => {
         perfCount = 0;
@@ -6708,7 +6970,7 @@
       mods.shift = mods.ctrl = mods.alt = false;
     });
     window.addEventListener('resize', resize);
-    window.addEventListener('beforeunload', persist);
+    window.addEventListener('beforeunload', () => { finishBookmarkTransition(false); persist(); });
     resize();
     boot();
   }

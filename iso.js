@@ -18,6 +18,7 @@
   const meshes = new Map();
   let lastPhysics = 0, gravityActive = false, velocities = new Map(), interactionHandles = [], lastPointer = null, modifiers = {}, metaEditor = null, guides = [];
   let pendingShared = null;
+  let dataDashboard = null;
   const live = () => model ? Engine.alive(model) : [];
   const selection = () => live().filter(s => selected.has(s.id));
   const thickness = s => Math.max(0.1, s.height || 8), elevation = s => Math.max(0, s.z || 0);
@@ -55,6 +56,7 @@
   function persist() {
     if (EPHEMERAL) return;
     clearTimeout(saveTimer);
+    if (dataDashboard?.hasPendingEdits()) { persistSoon(); return; }
     try {
       view.isoDirection = camera.direction; view.isoCamera = { ...camera };
       const local = { ...shared, board: model ? Engine.capture(model) : null, view: { ...view } }, remote = window.ProgramModeState?.latest();
@@ -74,12 +76,78 @@
   }
   function applyShared(next) {
     if (!next?.board) return;
-    if (drag || metaEditor || document.activeElement?.matches('input,textarea,select')) { pendingShared = next; return; }
+    if (drag || metaEditor || dataDashboard?.hasPendingEdits() || document.activeElement?.matches('input,textarea,select')) {
+      pendingShared = next;
+      if (dataDashboard?.hasPendingEdits()) persistSoon();
+      return;
+    }
     const local = { ...shared, board: model ? Engine.capture(model) : next.board, view }, merged = shared.board && shared.board.fileName === next.board.fileName ? window.ProgramModeState.reconcile(shared, local, next) : next;
     pendingShared = null; const newDocument = model?.fileName !== merged.board.fileName;
-    model = Engine.restore(merged.board); shared = merged; view = { ...merged.view, isoDirection: camera.direction, isoCamera: { ...camera } }; selected = new Set([...selected].filter(id => live().some(s => s.id === id))); gravityActive = false; velocities.clear(); sync(); if (newDocument) fit(); else requestDraw();
+    // Keep the received snapshot as the merge baseline until persistence;
+    // the displayed merge may already contain local edits absent remotely.
+    model = Engine.restore(merged.board); shared = JSON.parse(JSON.stringify(next)); view = { ...merged.view, isoDirection: camera.direction, isoCamera: { ...camera } }; selected = new Set([...selected].filter(id => live().some(s => s.id === id))); gravityActive = false; velocities.clear(); sync(); if (newDocument) fit(); else requestDraw();
   }
-  function flushEdits() { if (document.activeElement?.matches('input:not([type=file]),textarea')) document.activeElement.blur(); if (pendingShared && !drag) applyShared(pendingShared); persist(); }
+  function finishMotion() {
+    if (drag) endPointer({ clientX: drag.pointer?.x || 0, clientY: drag.pointer?.y || 0 });
+    if (turn) {
+      angle = turn.to;
+      const finalBasis = basis();
+      camera.x = turn.pivot[0] + finalBasis.right[0] * turn.offset;
+      camera.y = turn.pivot[1] + finalBasis.right[1] * turn.offset;
+      turn = null;
+    }
+    if (gravityActive) Physics.gravity(live(), 100000, new Set(), velocities);
+    gravityActive = false; velocities.clear(); guides = []; spaceHeld = false;
+    if (rangeBefore) { remember(rangeBefore); rangeBefore = null; }
+    scene.style.cursor = 'default';
+    requestDraw();
+  }
+  function flushEdits() {
+    const saved = dataDashboard?.commitActive();
+    if (saved && typeof saved.then === 'function') return saved.then(ok => ok === false ? false : flushEdits());
+    if (saved === false) return false;
+    if (document.activeElement?.matches('input:not([type=file]),textarea')) document.activeElement.blur();
+    finishMotion();
+    if (pendingShared) applyShared(pendingShared);
+    persist();
+    return true;
+  }
+  function editDashboard(operation) {
+    if (!model) return false;
+    finishMotion();
+    const before = snapshot(), candidate = Engine.restore(before.board);
+    const step = Number(view.gridStep) || 10;
+    const params = target => Engine.setParams(target, Math.max(0, (Number(target.bufferMul) || 0) * step), target.fudge && view.grid ? step : 0, step, !!view.grid);
+    params(candidate);
+    const result = operation(candidate);
+    if (result === 0 || result === false) return result;
+    params(candidate);
+    const old = new Map(model.stickies.map(sticky => [sticky.rowIndex, sticky]));
+    const resized = Engine.alive(candidate).filter(sticky => {
+      const previous = old.get(sticky.rowIndex);
+      return !previous || Math.abs(sticky.w - previous.w) > 1e-7 || Math.abs(sticky.h - previous.h) > 1e-7;
+    });
+    if (resized.length) {
+      const frame = candidate.frame;
+      if (frame && resized.some(sticky => sticky.x < frame.x || sticky.y < frame.y || sticky.x + sticky.w > frame.x + frame.w || sticky.y + sticky.h > frame.y + frame.h)) {
+        throw new Error('Those cell dimensions reach outside the frame. Enlarge the frame or use smaller values.');
+      }
+      if (!Physics.separate(Engine.alive(candidate), new Set(), { ...physicsOptions(), frame: frame, lines: candidate.lines })) {
+        throw new Error('Those cell dimensions cannot fit inside this frame.');
+      }
+    }
+    // Validate against a copy, then mutate the original rows so the shared
+    // editor keeps its row references and an invalid edit changes nothing.
+    operation(model); params(model);
+    const placements = new Map(candidate.stickies.map(sticky => [sticky.rowIndex, sticky]));
+    model.stickies.forEach(sticky => {
+      const placement = placements.get(sticky.rowIndex);
+      if (placement) { sticky.x = placement.x; sticky.y = placement.y; }
+    });
+    selected = new Set([...selected].filter(id => live().some(sticky => sticky.id === id)));
+    lastHits = []; remember(before); changed();
+    return true;
+  }
   function persistSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(persist, 180); }
   function setSelection(ids) { selected = new Set(model ? Engine.expandToGroups(model, ids) : ids); sync(); requestDraw(); }
   function meshFor(s) {
@@ -260,7 +328,7 @@
     $('appearance-note').textContent = first ? ({ matte: 'Soft, diffuse surface.', ceramic: 'White ceramic · soft studio finish.', glossy: 'Polished surface with broad reflections.', jelly: 'A translucent, gummy solid.', glass: 'Frosted translucency with a fine grain.' }[first.material || 'matte']) : 'Choose a material for your next sticky.';
     $('leaders').value = Number(view.leaderThreshold) || 0; $('leaders-value').textContent = Number(view.leaderThreshold) ? `< ${view.leaderThreshold}px` : 'Off';
     document.querySelectorAll('[data-direction]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.direction === camera.direction)));
-    $('undo').disabled = !undoStack.length; $('redo').disabled = !redoStack.length; $('save').disabled = !count;
+    $('undo').disabled = !undoStack.length; $('redo').disabled = !redoStack.length; $('save').disabled = !model?.rows.length;
     $('dig-section').hidden = lastHits.length < 2;
     $('dig-list').replaceChildren(); lastHits.slice(0, 8).forEach((hit, i) => { const button = document.createElement('button'); button.textContent = `${i + 1}. ${Engine.nameOf(model, hit.sticky)} · ${Number(elevation(hit.sticky).toFixed(1))} ft`; button.classList.toggle('active', selected.has(hit.sticky.id)); button.addEventListener('click', () => { digIndex = i; setSelection([hit.sticky.id]); }); $('dig-list').append(button); });
     if ($('cell-area')) { $('cell-area').disabled = list.length !== 1; if (document.activeElement !== $('cell-area')) $('cell-area').value = first ? Number(Engine.trueArea(first).toFixed(2)) : ''; }
@@ -269,7 +337,8 @@
     if ($('ungroup-selected')) $('ungroup-selected').disabled = !list.some(s => s.group);
     if ($('delete-selected')) $('delete-selected').disabled = !enabled;
     if ($('grid')) $('grid').setAttribute('aria-pressed', String(!!view.grid));
-    syncMetadata(); window.ProgramIsoUI?.refresh();
+    $('src-data').disabled = !model;
+    syncMetadata(); window.ProgramIsoUI?.refresh(); dataDashboard?.refresh();
   }
   function newCell(x, y) {
     if (live().length >= Engine.MAX_STICKIES) { toast('This board is limited to ' + Engine.MAX_STICKIES + ' cells.'); return; }
@@ -280,7 +349,7 @@
       remember(before); changed(); fit(); return;
     }
     const fields = Object.fromEntries(model.columns.map(k => [k, ''])); fields[model.nameKey] = 'Untitled'; fields[model.areaKey] = '400';
-    const rowIndex = model.rows.length; model.rows.push({ fields, dropped: false });
+    const rowIndex = model.rows.length; model.rows.push({ id: Engine.uid('r'), fields, dropped: false });
     const point = Number.isFinite(x) && Number.isFinite(y) ? onPlane(x, y, 0) : onPlane((width - inspectorWidth()) / 2, height / 2, 0);
     const s = { id: Engine.uid('s'), rowIndex, x: point[0] - 10, y: point[1] - 10, w: 20, h: 20, tw: 20, th: 20, height: 1.4, z: 0, material: defaultMaterial, color: '#d7a38a', radius: 0.7, stroke: 0, shadow: 0, group: null, textFace: null, textScale: null, textColor: null, dragging: false, dragTarget: null, passId: null };
     model.stickies.push(s); selected = new Set([s.id]); remember(before); changed();
@@ -467,6 +536,7 @@
   async function openFile(file) {
     if (!file || fileBusy) return; fileBusy = true;
     try {
+      if (await flushEdits() === false || dataDashboard?.close() === false) throw new Error('Correct the highlighted table value before opening another program.');
       const before = snapshot(); let opened, isoCamera = null;
       if (/\.zip$/i.test(file.name)) {
         const parts = await Engine.readSaveZip(await file.arrayBuffer()); opened = Engine.openSave(parts);
@@ -482,8 +552,9 @@
     finally { fileBusy = false; $('file').value = ''; }
   }
   async function save() {
-    if (!model || !live().length) return;
     try {
+      if (await flushEdits() === false) throw new Error('Correct the highlighted table value before saving.');
+      if (!model || !model.rows.length) return;
       view.isoDirection = camera.direction; view.isoCamera = { ...camera };
       const saved = await Engine.buildSave(model, view, shared.camera || null, { app: 'Program board · Isometric' });
       const url = URL.createObjectURL(new Blob([saved.bytes], { type: 'application/zip' })), a = document.createElement('a'); a.href = url; a.download = saved.name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); persist(); toast('Saved spreadsheet, layout and 3D properties.');
@@ -502,7 +573,7 @@
     if (!EPHEMERAL && window.ProgramModeState?.subscribe) window.ProgramModeState.subscribe(applyShared);
     initRenderer(); resize(); sync();
     if (model && !(view.isoCamera && validCamera(view.isoCamera))) fit();
-    window.__iso = { get model() { return model; }, get camera() { return camera; }, get view() { return view; }, get modeState() { return model ? { board: Engine.capture(model), view: { ...view, isoDirection: camera.direction, isoCamera: { ...camera } }, camera: shared.camera || null } : null; }, get selected() { return [...selected]; }, get topMode() { return topMode; }, get settled() { return !drag && !turn && !gravityActive; }, get renderer() { return renderer?.mode || 'software'; }, get interaction() { return drag ? { kind: drag.kind, mode: drag.mode, axis: drag.axis, moved: drag.moved, pressure: drag.pressure || null, hop: drag.hop || null, carried: [...(drag.carried || [])], handles: roofHandles().map(h => ({ kind: h.kind, edge: h.edge, x: h.x, y: h.y })) } : { kind: null, handles: roofHandles().map(h => ({ kind: h.kind, edge: h.edge, x: h.x, y: h.y })) }; }, project, hitsAt, select: setSelection, fit, rotate, stack: stackSelected, setTopMode, newCell, undo, redo, persist, refresh: changed, geometry: Geo, physics: Physics, pointerDown: beginPointer, pointerMove: movePointer, pointerUp: endPointer, editVertical, editMetadata, install(next, nextView) { model = next; view = { ...view, ...(nextView || {}) }; selected.clear(); gravityActive = false; sync(); fit(); } };
+    window.__iso = { get model() { return model; }, get camera() { return camera; }, get view() { return view; }, get dataDashboard() { return dataDashboard; }, get modeState() { return model ? { board: Engine.capture(model), view: { ...view, isoDirection: camera.direction, isoCamera: { ...camera } }, camera: shared.camera || null } : null; }, get selected() { return [...selected]; }, get topMode() { return topMode; }, get settled() { return !drag && !turn && !gravityActive; }, get renderer() { return renderer?.mode || 'software'; }, get interaction() { return drag ? { kind: drag.kind, mode: drag.mode, axis: drag.axis, moved: drag.moved, pressure: drag.pressure || null, hop: drag.hop || null, carried: [...(drag.carried || [])], handles: roofHandles().map(h => ({ kind: h.kind, edge: h.edge, x: h.x, y: h.y })) } : { kind: null, handles: roofHandles().map(h => ({ kind: h.kind, edge: h.edge, x: h.x, y: h.y })) }; }, project, hitsAt, select: setSelection, fit, rotate, stack: stackSelected, setTopMode, newCell, undo, redo, persist, refresh: changed, geometry: Geo, physics: Physics, pointerDown: beginPointer, pointerMove: movePointer, pointerUp: endPointer, editVertical, editMetadata, install(next, nextView) { model = next; view = { ...view, ...(nextView || {}) }; selected.clear(); gravityActive = false; sync(); fit(); } };
   }
   window.addEventListener('focus', () => { if (!EPHEMERAL) { const latest = window.ProgramModeState?.latest(); if (latest && JSON.stringify(latest.board) !== JSON.stringify(shared.board)) applyShared(latest); } });
   $('src-open').addEventListener('click', () => $('file').click()); $('empty-open').addEventListener('click', () => $('file').click()); $('file').addEventListener('change', () => openFile($('file').files[0]));
@@ -527,9 +598,15 @@
   scene.addEventListener('pointerdown', beginPointer); scene.addEventListener('pointermove', movePointer); scene.addEventListener('pointerup', endPointer); scene.addEventListener('pointercancel', () => { if (drag?.before) restore(drag.before); drag?.physics?.release(); drag = null; requestDraw(); }); scene.addEventListener('pointerleave', () => { if (!drag) { hover = null; requestDraw(); } }); scene.addEventListener('dblclick', e => { const hit = hitsAt(e.clientX, e.clientY)[0]; if (hit) { setSelection([hit.sticky.id]); editMetadata(e.shiftKey || e.altKey ? 'area' : 'name', hit.sticky); } }); scene.addEventListener('wheel', e => { e.preventDefault(); if (!turn) zoom(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); }, { passive: false });
   // The custom menu opens under the pointer before contextmenu may fire.
   // Capture across the page so neither it nor the canvas opens the host menu.
-  window.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); }, true);
-  window.addEventListener('resize', resize); window.addEventListener('beforeunload', persist);
+  const editorTarget = event => !!event.target?.closest?.('.board-data-dashboard,.board-data-tags-menu');
+  window.addEventListener('contextmenu', e => { if (editorTarget(e)) return; e.preventDefault(); e.stopPropagation(); }, true);
+  window.addEventListener('resize', resize); window.addEventListener('beforeunload', flushEdits);
+  window.addEventListener('keydown', event => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 's') return;
+    event.preventDefault(); event.stopPropagation(); save();
+  }, true);
   window.addEventListener('keydown', e => {
+    if (editorTarget(e)) return;
     if (e.target.closest('input,textarea,select,[contenteditable]')) return;
     if (e.code === 'Space') { spaceHeld = true; scene.style.cursor = 'grab'; e.preventDefault(); return; }
     const command = e.ctrlKey || e.metaKey;
@@ -548,8 +625,27 @@
     else if (e.key.startsWith('Arrow') && selection().length) { e.preventDefault(); const step = (view.grid ? Number(view.gridStep) || 10 : 1) * (e.shiftKey ? 10 : 1), dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0, dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0; mutate(() => Physics.move(live(), selected, dx, dy, physicsOptions())); gravityActive = true; }
     else if (e.key.toLowerCase() === 'f') fit(); else if (e.key.toLowerCase() === 'n') newCell(); else if (e.key === '[') rotateStep(-1); else if (e.key === ']') rotateStep(1);
   });
-  window.addEventListener('keyup', e => { if (e.code === 'Space') { spaceHeld = false; scene.style.cursor = 'default'; } if (drag?.kind === 'move' && ['Shift', 'Control', 'Meta', 'Alt'].includes(e.key)) movePointer({ clientX: drag.pointer.x, clientY: drag.pointer.y, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey }); }); window.addEventListener('blur', () => { spaceHeld = false; drag?.physics?.release(); if (drag?.before) { remember(drag.before); gravityActive = true; } drag = null; requestDraw(); });
+  window.addEventListener('keyup', e => { if (editorTarget(e)) return; if (e.code === 'Space') { spaceHeld = false; scene.style.cursor = 'default'; } if (drag?.kind === 'move' && ['Shift', 'Control', 'Meta', 'Alt'].includes(e.key)) movePointer({ clientX: drag.pointer.x, clientY: drag.pointer.y, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey }); }); window.addEventListener('blur', () => { spaceHeld = false; drag?.physics?.release(); if (drag?.before) { remember(drag.before); gravityActive = true; } drag = null; requestDraw(); });
   document.addEventListener('dragenter', e => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); dropDepth++; $('drop').hidden = false; } }); document.addEventListener('dragover', e => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }); document.addEventListener('dragleave', e => { if (e.dataTransfer?.types.includes('Files')) { dropDepth = Math.max(0, dropDepth - 1); if (!dropDepth) $('drop').hidden = true; } }); document.addEventListener('drop', e => { e.preventDefault(); dropDepth = 0; $('drop').hidden = true; openFile(e.dataTransfer?.files[0]); });
+  dataDashboard = window.ProgramDataDashboard.create({
+    button: $('src-data'), getModel: () => model, engine: Engine,
+    onEdit: ({ rowIndex, key, value }) => editDashboard(target => Engine.editRowField(target, rowIndex, key, value)),
+    onRoles: roles => editDashboard(target => Engine.setColumnRoles(target, roles)),
+    onAddColumn: name => editDashboard(target => Engine.ensureColumn(target, name)),
+    onCommit: flushEdits,
+    onOpen: () => { finishMotion(); window.ProgramIsoUI?.close(); },
+    onClose: () => { if (pendingShared) applyShared(pendingShared); persist(); },
+  });
+  $('src-data').addEventListener('click', () => {
+    if (!dataDashboard.isOpen()) { flushEdits(); window.ProgramIsoUI?.close(); $('views').hidden = $('iso-export').hidden = true; }
+  }, true);
+  $('tb-display').addEventListener('click', event => {
+    if (dataDashboard.commitActive() === false) { event.preventDefault(); event.stopImmediatePropagation(); toast('Correct the highlighted table value before switching views.'); }
+  }, true);
+  document.addEventListener('click', event => {
+    if (!event.target.closest?.('#display-mode-menu a')) return;
+    if (flushEdits() === false) { event.preventDefault(); event.stopImmediatePropagation(); toast('Correct the highlighted table value before switching views.'); }
+  }, true);
   load();
   window.__iso.flushEdits = flushEdits;
   sync();

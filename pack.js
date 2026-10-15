@@ -27,6 +27,7 @@
   let preparedColors = null;
   let leaders = { items: [] };
   let incomingPending = null;
+  let sharedSaveTimer = 0;
   let order = [];
   let aspect = 1.6;
   let scale = 1;
@@ -46,6 +47,7 @@
   let toastTimer = 0;
   let raf = 0;
   let nameEdit = null;
+  let dataDashboard = null;
   let chrome = { title: null };
   let menuAt = null;
   let background = '#ffffff';
@@ -204,7 +206,7 @@
     return {
       board: Engine.capture(model), view: JSON.parse(JSON.stringify(shared.view || {})), leaderThreshold,
       columns: model.columns.slice(), groupKey: model.groupKey,
-      rows: model.rows.map((r) => ({ fields: Object.assign({}, r.fields), dropped: !!r.dropped })),
+      rows: model.rows.map((r) => ({ id: r.id, fields: Object.assign({}, r.fields), dropped: !!r.dropped })),
       stickies: model.stickies.map((s) => ({ ...s, style: s.style ? { ...s.style } : undefined })),
       background, backgroundSwatch, departmentDividers, colorSwatches: copySwatches(), buffer, fillet, boardText: { ...boardText }, departmentColors: Array.from(departmentColors),
       order: order.slice(),
@@ -223,8 +225,9 @@
     leaderThreshold = Number(s.leaderThreshold ?? s.view?.leaderThreshold) || 0;
     if (s.columns) model.columns = s.columns.slice();
     model.groupKey = s.groupKey;
-    model.rows = s.rows.map((r) => ({ fields: Object.assign({}, r.fields), dropped: r.dropped }));
+    model.rows = s.rows.map((r) => ({ id: r.id, fields: Object.assign({}, r.fields), dropped: r.dropped }));
     model.stickies = s.stickies.map((st) => ({ ...st, style: st.style ? { ...st.style } : undefined }));
+    Engine.ensureRowIds(model);
     background = s.background || '#ffffff';
     buffer = s.buffer || 0; fillet = s.fillet || 0;
     boardText = { face: 'std', size: 1, ink: null, ...s.boardText };
@@ -245,8 +248,8 @@
     $('name-input').hidden = true;
   }
 
-  function pushUndo() {
-    undoStack.push(snapshot());
+  function pushUndo(before) {
+    undoStack.push(before || snapshot());
     if (undoStack.length > 80) undoStack.shift();
     redoStack = [];
   }
@@ -302,8 +305,15 @@
     };
   }
 
+  function queueSharedPersist() {
+    clearTimeout(sharedSaveTimer);
+    sharedSaveTimer = setTimeout(persist, 400);
+  }
+
   function persist() {
+    clearTimeout(sharedSaveTimer);
     if (fresh || !model) return;
+    if (dataDashboard?.hasPendingEdits()) { queueSharedPersist(); return; }
     let next = { ...shared, board: Engine.capture(model), view: { ...(shared.view || {}), leaderThreshold, pack: packSettings() } };
     const remote = incomingPending || window.ProgramModeState?.latest();
     if (remote && sharedBase?.board && window.ProgramModeState?.reconcile && JSON.stringify(remote) !== JSON.stringify(sharedBase)) {
@@ -318,6 +328,7 @@
   }
 
   function applyShared(saved) {
+    if (dataDashboard?.hasPendingEdits()) { incomingPending = saved; queueSharedPersist(); return false; }
     shared = JSON.parse(JSON.stringify(saved));
     sharedBase = JSON.parse(JSON.stringify(saved));
     shared.view = shared.view || {};
@@ -345,6 +356,7 @@
   }
 
   function flushEdits() {
+    if (dataDashboard?.commitActive() === false) throw new Error('Correct the highlighted table value before continuing.');
     const active = document.activeElement;
     if (active && active !== document.body && typeof active.blur === 'function') active.blur();
     if (nameEdit) {
@@ -352,6 +364,7 @@
       else { commitName(); if (nameEdit) { nameEdit = null; $('name-input').hidden = true; } }
     }
     if (drag) cancelDrag();
+    anim = null; liveTiles = null;
     persist();
     return sharedState();
   }
@@ -422,6 +435,7 @@
   }
 
   function openCsv(text, name) {
+    if (dataDashboard?.close() === false) throw new Error('Correct the highlighted table value before opening another program.');
     const next = modelFromCsv(text, name);
     shared = { view: {}, camera: null };
     sharedBase=null;leaderThreshold=0;
@@ -434,6 +448,7 @@
   }
 
   async function openFile(file) {
+    if (dataDashboard?.close() === false) { toast('Correct the highlighted table value before opening another program.'); return; }
     const name = file.name || 'program.csv';
     try {
       if (/\.(zip|json)$/i.test(name)) {
@@ -459,6 +474,7 @@
   }
 
   function openCsvAwait(next) {
+    if (dataDashboard?.close() === false) throw new Error('Correct the highlighted table value before opening another program.');
     shared = { view: {}, camera: null };
     sharedBase=null;leaderThreshold=0;
     adopt(next, true);
@@ -922,6 +938,7 @@
 
   function onDown(e) {
     if (!model || e.target !== canvas) return;
+    if (dataDashboard?.commitActive() === false) return;
     closePops(); anim = null;
     const p = point(e);
     if (e.button === 1 || e.button === 2 || (e.button === 0 && space)) {
@@ -1181,7 +1198,7 @@
   }
 
   function syncStatus() {
-    for (const id of ['tb-algo', 'tb-aspect', 'tb-fit', 'tb-repack', 'tb-save', 'tb-export']) $(id).disabled = !model;
+    for (const id of ['tb-algo', 'tb-aspect', 'tb-fit', 'tb-repack', 'tb-save', 'tb-export', 'src-data']) $(id).disabled = !model;
     for (const button of $('nest').querySelectorAll('.seg')) button.disabled = !model;
     if (!model) { $('status').textContent = ''; return; }
     const zeros = hiddenZeros();
@@ -1207,6 +1224,70 @@
 
   function syncChrome() {
     syncStatus();
+    dataDashboard?.refresh();
+  }
+
+  function finishEditorMotion() {
+    if (drag) cancelDrag();
+    anim = null; liveTiles = null; space = false;
+    closePops();
+  }
+
+  function finishTableChange(tree, beforeIds, beforeAreas) {
+    const known = new Set(order);
+    order = order.filter((id) => sticky(id) && kept(sticky(id)));
+    for (const s of model.stickies) if (kept(s) && !known.has(s.id)) order.push(s.id);
+    const nextItems = items().filter((item) => item.area > 0);
+    const nextIds = new Set(nextItems.map((item) => item.id));
+    // A dormant row has no tile in the prior tree. Build a complete layout
+    // when it becomes active; ordinary area edits retain manual adjacency.
+    if ([...nextIds].some((id) => !beforeIds.has(id))) manual = null;
+    else if (nextIds.size !== beforeIds.size || nextItems.some((item) => Math.abs(item.area - (beforeAreas.get(item.id) || 0)) > 1e-8)) reflow(tree);
+    selected = new Set([...selected].filter((id) => nextIds.has(id)));
+    persist(); syncChrome(); requestDraw();
+  }
+
+  function wireDataDashboard() {
+    $('src-data').addEventListener('click', finishEditorMotion, true);
+    dataDashboard = window.ProgramDataDashboard.create({
+      button: $('src-data'), getModel: () => model, engine: Engine,
+      onEdit: ({ rowIndex, key, value }) => {
+        finishEditorMotion();
+        const before = snapshot();
+        const laid = settled().tiles;
+        const changed = Engine.editRowField(model, rowIndex, key, value);
+        if (!changed) return;
+        pushUndo(before);
+        finishTableChange(PB.treeOf(laid), new Set(laid.map((tile) => tile.id)), new Map(before.stickies.map((s) => [s.id, s.tw * s.th])));
+      },
+      onRoles: (roles) => {
+        finishEditorMotion();
+        const before = snapshot();
+        const laid = settled().tiles;
+        Engine.setColumnRoles(model, roles);
+        pushUndo(before);
+        finishTableChange(PB.treeOf(laid), new Set(laid.map((tile) => tile.id)), new Map(before.stickies.map((s) => [s.id, s.tw * s.th])));
+      },
+      onAddColumn: (name) => {
+        finishEditorMotion();
+        const before = snapshot();
+        Engine.ensureColumn(model, name);
+        pushUndo(before);
+        persist(); syncChrome(); requestDraw();
+      },
+      onCommit: () => { flushEdits(); toast('Program data committed.'); },
+      onOpen: finishEditorMotion,
+      onClose: () => { persist(); requestDraw(); },
+    });
+    const guardModeSwitch = (event) => {
+      if (dataDashboard.commitActive() !== false) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      toast('Correct the highlighted table value before switching views.');
+    };
+    $('tb-display').addEventListener('click', guardModeSwitch, true);
+    document.addEventListener('click', (event) => {
+      if (event.target.closest?.('#display-mode-menu a')) guardModeSwitch(event);
+    }, true);
   }
 
   function buildData(el) {
@@ -1961,6 +2042,7 @@
 
   function exportAs(kind) {
     if (!model) return;
+    try { flushEdits(); } catch (err) { toast(err.message); return; }
     if (kind === 'csv') {
       download(baseName() + '.pack.csv', new Blob([csv()], { type: 'text/csv' }));
       return;
@@ -2048,13 +2130,17 @@
 
   function onKey(e) {
     if (!model) return;
+    if (e.target.closest?.('.board-data-dashboard, .board-data-tags-menu')) return;
     if (e.code === 'Space' && !typing()) space = true;
     if (typing()) {
       if (e.key === 'Escape' && nameEdit) { e.preventDefault(); $('name-input').hidden = true; nameEdit = null; requestDraw(); }
       return;
     }
     const meta = e.ctrlKey || e.metaKey;
-    if (e.key === 'Escape') { cancelDrag(); closePops(); selected.clear(); syncChrome(); requestDraw(); }
+    if (e.key === 'Escape') {
+      if (dataDashboard?.isOpen()) { dataDashboard.close(); return; }
+      cancelDrag(); closePops(); selected.clear(); syncChrome(); requestDraw();
+    }
     else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); if (e.shiftKey) fitArea(); else fitView(); }
     else if (meta && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
     else if (meta && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
@@ -2161,8 +2247,14 @@
       openName(tile.id, inBox(areaHits.get(tile.id), p.x, p.y));
     } else if (inBox(chrome.title, p.x, p.y)) openTitle();
   });
-  window.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); }, true);
-  document.addEventListener('mousedown', (e) => { if (e.target.closest?.('button')) e.preventDefault(); });
+  window.addEventListener('contextmenu', (e) => {
+    if (e.target.closest?.('.board-data-dashboard, .board-data-tags-menu')) return;
+    e.preventDefault(); e.stopPropagation();
+  }, true);
+  document.addEventListener('mousedown', (e) => {
+    if (e.target.closest?.('.board-data-dashboard, .board-data-tags-menu')) return;
+    if (e.target.closest?.('button')) e.preventDefault();
+  });
   canvas.addEventListener('wheel', (e) => {
     if (!model) return;
     e.preventDefault();
@@ -2178,10 +2270,14 @@
   }, { passive: false });
 
   window.addEventListener('keydown', onKey);
+  window.addEventListener('keydown', (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 's') return;
+    event.preventDefault(); event.stopPropagation(); saveBoard();
+  }, true);
   window.addEventListener('keyup', (e) => { if (e.code === 'Space') space = false; });
   window.addEventListener('resize', () => { resize(); fitView(); requestDraw(); });
   window.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('#pop-algo, #pop-aspect, #pop-export, #menu, #tb-algo, #tb-aspect, #tb-export')) return;
+    if (e.target.closest('#pop-algo, #pop-aspect, #pop-export, #menu, #tb-algo, #tb-aspect, #tb-export, #src-data, .board-data-dashboard, .board-data-tags-menu')) return;
     closePops();
   });
   window.addEventListener('dragover', (e) => { e.preventDefault(); $('src').classList.add('drop'); $('empty').classList.add('drop'); });
@@ -2195,6 +2291,7 @@
   });
 
   fresh = new URLSearchParams(location.search).has('fresh');
+  wireDataDashboard();
   resize();
   if (errors.length) toast('Packing check failed: ' + errors[0]);
   const handoff = window.ProgramModeState && window.ProgramModeState.read();
@@ -2207,6 +2304,7 @@
   window.__pack = {
     get model() { return model; }, get camera() { return camera; }, get view() { return sharedState()?.view || {}; },
     get modeState() { return sharedState(); }, get leaders() { return leaders; },
+    get dataDashboard() { return dataDashboard; },
     flushEdits, persist, openCsv, openFile, serialize, applyShared, settled, csv, undo, redo,
     get selected() { return [...selected]; }, select(ids) { selected = new Set(Array.isArray(ids) ? ids : [ids]); syncChrome(); requestDraw(); },
   };
@@ -2215,7 +2313,11 @@
     if (fresh || event.key !== STORE || !event.newValue) return;
     let next; try { next = JSON.parse(event.newValue); } catch (err) { return; }
     if (!next?.board) return;
-    if (drag || nameEdit || typing()) { incomingPending = next; return; }
+    if (drag || nameEdit || typing() || dataDashboard?.hasPendingEdits()) {
+      incomingPending = next;
+      if (dataDashboard?.hasPendingEdits()) queueSharedPersist();
+      return;
+    }
     const keep = [...selected]; applyShared(next); selected = new Set(keep.filter(id => sticky(id) && kept(sticky(id)))); syncChrome(); requestDraw();
   });
 })();

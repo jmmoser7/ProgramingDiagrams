@@ -24,13 +24,14 @@
     @media(max-width:1080px){#views{left:calc((100% - 250px)/2);top:62px}#source{max-width:calc(100vw - 280px)}#status{display:none}#toolbar{left:calc((100% - 250px)/2);max-width:calc(100vw - 280px);flex-wrap:wrap;justify-content:center}#toolbar .divider{display:none}}
     @media(max-width:670px){#inspector{width:190px;right:8px;top:8px;padding:11px;gap:11px;max-height:calc(100vh - 18px)}#source{left:8px;top:8px;max-width:calc(100vw - 214px)}#source .divider,#selection-count{display:none}#src-name{max-width:88px}#views{top:52px;left:calc((100% - 200px)/2)}#views .label{display:none}#views button{padding:4px 5px}#toolbar{left:calc((100% - 200px)/2);max-width:calc(100vw - 210px);bottom:8px}#toolbar button{padding:4px 6px}#empty{left:calc((100% - 200px)/2);max-width:calc(100vw - 225px)}#empty .actions{flex-direction:column}#empty h1{font-size:18px}.form-row{grid-template-columns:1fr 70px}}
   </style>
-<link rel="stylesheet" href="chrome.css">
+<link rel="stylesheet" href="chrome.css?v=20261015-editor-tags-3">
+<link rel="stylesheet" href="board-data-ui.css?v=20261015-editor-tags-3">
 </head>
 <body class="iso-board">
   <canvas id="ground" aria-hidden="true"></canvas>
   <canvas id="scene" aria-label="Isometric sticky board. Drag cells to move, scroll to zoom, and use the inspector to edit their extrusion." tabindex="0"></canvas>
   <canvas id="overlay" aria-hidden="true"></canvas>
-  <div id="source" class="cap row"><button id="src-open" title="Open CSV, Excel, or a saved board">↥ <span id="src-name">Open program</span></button><span class="divider"></span><span id="selection-count">0 cells</span></div>
+  <div id="source" class="cap row"><button id="src-open" title="Open CSV, Excel, or a saved board">↥ <span id="src-name">Open program</span></button><button id="src-data" class="btn" type="button" title="Edit program data and column tags" aria-label="Edit data" aria-haspopup="dialog" aria-expanded="false" disabled>Edit data</button><span class="divider"></span><span id="selection-count">0 cells</span></div>
   <nav id="views" hidden class="cap row iso-views" aria-label="Locked isometric direction"><button class="rotate" id="rotate-left" title="Rotate left 90° [">↶</button><span class="label">Corner iso</span><button data-direction="NW" aria-pressed="false">NW</button><button data-direction="NE" aria-pressed="true">NE</button><button data-direction="SE" aria-pressed="false">SE</button><button data-direction="SW" aria-pressed="false">SW</button><button class="rotate" id="rotate-right" title="Rotate right 90° ]">↷</button></nav>
   <aside id="inspector" class="stack context-stack" aria-label="Cell context menu" hidden>
     <div class="cap row spread context-title"><span id="inspector-title">Cell</span><button id="context-close" title="Close menu">×</button></div>
@@ -73,6 +74,7 @@
   <div id="empty"><div class="glyph" aria-hidden="true"></div><h1>A little more dimension.</h1><p>Bring your program into an isometric board. Extrude, round and stack every cell.</p><div class="actions"><button id="empty-open" class="primary">Open a spreadsheet</button><button id="empty-new">Add a sticky</button></div></div>
   <div id="toast" role="status" hidden></div><div id="drop" hidden>Drop a spreadsheet or saved board</div><div id="renderer-error" hidden></div>
   <input id="file" type="file" accept=".csv,.xlsx,.xlsm,.json,.zip" hidden>
-  <script src="appearance.js"></script><script src="engine.js"></script><script src="leaders.js"></script><script src="mode-state.js"></script><script src="iso-geometry.js"></script><script src="program-seed.js"></script><script src="iso-physics.js"></script><script src="iso-renderer.js"></script><script src="chrome.js"></script><script src="iso-ui.js"></script><script src="iso.js"></script><script src="display-mode.js"></script>
+  <script src="board-data-ui.js?v=20261015-editor-tags-3"></script>
+  <script src="appearance.js?v=20261015-editor-tags-3"></script><script src="engine.js?v=20261015-editor-tags-3"></script><script src="leaders.js?v=20261015-editor-tags-3"></script><script src="mode-state.js?v=20261015-editor-tags-3"></script><script src="iso-geometry.js?v=20261015-editor-tags-3"></script><script src="program-seed.js?v=20261015-editor-tags-3"></script><script src="iso-physics.js?v=20261015-editor-tags-3"></script><script src="iso-renderer.js?v=20261015-editor-tags-3"></script><script src="chrome.js?v=20261015-editor-tags-3"></script><script src="iso-ui.js?v=20261015-editor-tags-3"></script><script src="iso.js?v=20261015-editor-tags-3"></script><script src="display-mode.js?v=20261015-editor-tags-3"></script>
 </body>
 </html>

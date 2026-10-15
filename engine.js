@@ -47,6 +47,33 @@
     return prefix + seq.toString(36);
   }
 
+  // Rows need identities even while their area is zero and no sticky exists.
+  // Legacy snapshots derive the same ids in every view; the shared uid counter
+  // would give those rows different identities depending on what opened first.
+  function ensureRowIds(model) {
+    const rows = model.rows || [];
+    const stickyIds = new Map();
+    (model.stickies || []).forEach((s) => {
+      if (s && typeof s.id === 'string' && s.id && !stickyIds.has(s.rowIndex)) stickyIds.set(s.rowIndex, s.id);
+    });
+    const valid = (id) => typeof id === 'string' && id.trim() !== '';
+    const reserved = new Set(rows.map((row) => row.id).filter(valid));
+    const used = new Set();
+    rows.forEach((row, index) => {
+      let id = valid(row.id) ? row.id : null;
+      if (!id || used.has(id)) {
+        const base = stickyIds.has(index) ? 'row-' + stickyIds.get(index) : 'row-legacy-' + index.toString(36);
+        id = base;
+        let suffix = 1;
+        while (reserved.has(id) || used.has(id)) id = base + '-' + (++suffix);
+        row.id = id;
+        reserved.add(id);
+      }
+      used.add(id);
+    });
+    return rows;
+  }
+
   function num(value) {
     if (value == null) return 0;
     const n = Number(String(value).replace(/,/g, '').trim());
@@ -116,6 +143,10 @@
       groupKey: null,
       sfKey: null,
       qtyKey: null,
+      // Null keeps the imported sheet's automatic interpretation. A chosen
+      // configuration is authored data, just like the board's other settings.
+      columnRoles: null,
+      bookmarks: [],
       rows: [],
       stickies: [],
       lines: [],
@@ -129,6 +160,7 @@
       gap: CONTACT_GAP,
       cell: 0,
       grid: 0,
+      moduleGridActive: false,
       lineGen: 0,
     };
   }
@@ -213,7 +245,7 @@
         }
       }
       const rowIndex = model.rows.length;
-      model.rows.push({ fields: fields, dropped: false });
+      model.rows.push({ id: uid('r'), fields: fields, dropped: false });
       if (!(area > 0)) continue;
       const side = Math.sqrt(area);
       model.stickies.push(newSticky(rowIndex, 0, 0, side, side, null));
@@ -227,6 +259,174 @@
 
   function modelFromCsv(text, fileName) {
     return modelFromMatrix(parseCsv(text), fileName);
+  }
+
+  function cleanColumnRoles(model, value) {
+    const src = value || {};
+    const key = (v) => typeof v === 'string' && model.columns.indexOf(v) >= 0 ? v : null;
+    const area = key(src.areaKey);
+    return {
+      areaKey: area,
+      groupKeys: Array.from(new Set((Array.isArray(src.groupKeys) ? src.groupKeys : []).map(key).filter((k) => k && k !== area))),
+      countKey: key(src.countKey),
+      moduleWidthKey: key(src.moduleWidthKey),
+      moduleDepthKey: key(src.moduleDepthKey),
+      moduleLock: src.moduleLock === 'hard' ? 'hard' : 'loose',
+    };
+  }
+
+  function getColumnRoles(model) {
+    if (model.columnRoles) return cleanColumnRoles(model, model.columnRoles);
+    return cleanColumnRoles(model, {
+      areaKey: model.areaKey,
+      groupKeys: categoricalOf(model, alive(model).map((s) => sFields(model, s))).map((c) => c.key),
+    });
+  }
+
+  function getColumnTags(model) {
+    const roles = getColumnRoles(model);
+    const out = {};
+    model.columns.forEach((key) => {
+      const tags = [];
+      if (roles.areaKey === key) tags.push('area');
+      if (roles.groupKeys.indexOf(key) >= 0) tags.push('group');
+      if (roles.countKey === key) tags.push('count');
+      if (roles.moduleWidthKey === key) tags.push('moduleWidth');
+      if (roles.moduleDepthKey === key) tags.push('moduleDepth');
+      out[key] = tags;
+    });
+    return out;
+  }
+
+  // A tag changes the interpretation of existing cells. It never discards a
+  // zero-area row, and a row that becomes drawable reuses its former sticky.
+  function setColumnRoles(model, update) {
+    const requested = Object.assign(getColumnRoles(model), update || {});
+    const keys = ['areaKey', 'countKey', 'moduleWidthKey', 'moduleDepthKey'];
+    keys.forEach((name) => {
+      if (requested[name] != null && model.columns.indexOf(requested[name]) < 0) throw new Error('Unknown column: ' + requested[name]);
+    });
+    if (!Array.isArray(requested.groupKeys) || requested.groupKeys.some((key) => model.columns.indexOf(key) < 0)) throw new Error('Choose existing columns for the group tags.');
+    const next = cleanColumnRoles(model, requested);
+    const areaChanged = model.areaKey !== next.areaKey;
+    if (areaChanged && next.areaKey) {
+      const count = model.rows.filter((row) => !row.dropped && num(row.fields[next.areaKey]) > 0).length;
+      if (count > MAX_STICKIES) throw new Error('This selection wants ' + count + ' stickies. Stay under ' + MAX_STICKIES + '.');
+    }
+    ensureRowIds(model);
+    const clearances = groupClearances(model, alive(model));
+    model.columnRoles = next;
+    model.areaKey = next.areaKey;
+    model.deptKey = next.groupKeys[0] || null;
+    model.groupKey = next.groupKeys[1] || null;
+    if (areaChanged && next.areaKey) {
+      model.rows.forEach((row, rowIndex) => {
+        if (!row.dropped) applyRowArea(model, rowIndex, Math.max(0, num(row.fields[next.areaKey])));
+      });
+    }
+    model.stickies.forEach((s) => refit(model, s, false));
+    respaceGroups(clearances);
+    return getColumnRoles(model);
+  }
+
+  function rowModule(model, sticky) {
+    const roles = model.columnRoles;
+    if (!roles || !roles.moduleWidthKey || !roles.moduleDepthKey || !model.rows || !model.rows[sticky.rowIndex]) return null;
+    const fields = model.rows[sticky.rowIndex].fields;
+    const width = num(fields[roles.moduleWidthKey]);
+    const depth = num(fields[roles.moduleDepthKey]);
+    const count = roles.countKey ? num(fields[roles.countKey]) : 0;
+    return width > 0 && depth > 0 ? { width: width, depth: depth, lock: roles.moduleLock === 'hard' ? 'hard' : 'loose',
+      count: Number.isInteger(count) && count > 0 && count <= 10000 ? count : 0 } : null;
+  }
+
+  function moduleArrangement(sticky, module) {
+    if (module.count) {
+      let best = null;
+      for (let columns = 1; columns <= module.count; columns++) {
+        if (module.count % columns) continue;
+        const rows = module.count / columns;
+        const score = Math.abs(Math.log((columns * module.width / (rows * module.depth)) / (sticky.tw / sticky.th)));
+        if (!best || score < best.score) best = { columns: columns, rows: rows, score: score };
+      }
+      return best;
+    }
+    return { columns: Math.max(1, Math.ceil(sticky.tw / module.width - 1e-9)), rows: Math.max(1, Math.ceil(sticky.th / module.depth - 1e-9)) };
+  }
+
+  function moduleSize(sticky, module, grid, gridActive) {
+    const arrangement = moduleArrangement(sticky, module);
+    let width = arrangement.columns * module.width;
+    let height = arrangement.rows * module.depth;
+    if (module.lock === 'loose' && gridActive && grid > 0) {
+      width = Math.max(1, Math.round(width / grid)) * grid;
+      height = Math.max(1, Math.round(height / grid)) * grid;
+    }
+    return [width, height];
+  }
+
+  function moduleDrawnSize(model, sticky) {
+    const module = rowModule(model, sticky);
+    if (!module || !(sticky.tw > 0 && sticky.th > 0)) return null;
+    return moduleSize(sticky, module, model.grid, model.moduleGridActive);
+  }
+
+  // Local coordinates: the renderer translates these with the parent sticky.
+  // Count rows may have one fewer column so prime counts still fill the whole
+  // footprint with exactly N cells of equal area, without a leftover sliver.
+  function moduleLayout(model, sticky) {
+    const roles = model.columnRoles;
+    if (!roles || !sticky || !(sticky.w > 0 && sticky.h > 0) || !active(model, sticky)) return null;
+    const fields = sFields(model, sticky);
+    const rawCount = roles.countKey ? num(fields[roles.countKey]) : 0;
+    const module = rowModule(model, sticky);
+    const count = rawCount > 0 && Number.isInteger(rawCount) ? rawCount : 0;
+    if (!count && !module) return null;
+    // A malformed or enormous count must not allocate an unbounded render list.
+    if (count > 10000) return null;
+    const cells = [];
+    const lines = [];
+    const width = sticky.w;
+    const height = sticky.h;
+    let rows;
+    let columns;
+    if (count && !module) {
+      let best = null;
+      const targetAspect = module ? module.width / module.depth : 1;
+      for (let r = 1; r <= Math.min(count, Math.ceil(Math.sqrt(count * height / width * targetAspect) * 2) + 2); r++) {
+        const cols = count / r;
+        const skew = Math.abs(Math.log((width / cols) / (height / r) / targetAspect));
+        const ragged = count % r === 0 ? 0 : 0.12;
+        const score = skew + ragged;
+        if (!best || score < best.score) best = { rows: r, score: score };
+      }
+      rows = best.rows;
+      columns = Math.ceil(count / rows);
+      const base = Math.floor(count / rows);
+      const extra = count % rows;
+      let y = 0;
+      for (let r = 0; r < rows; r++) {
+        const n = base + (r < extra ? 1 : 0);
+        const rowHeight = r === rows - 1 ? height - y : height * n / count;
+        for (let c = 0; c < n; c++) cells.push({ x: c * width / n, y: y, w: width / n, h: rowHeight });
+        for (let c = 1; c < n; c++) lines.push({ x1: c * width / n, y1: y, x2: c * width / n, y2: y + rowHeight });
+        y += rowHeight;
+        if (r < rows - 1) lines.push({ x1: 0, y1: y, x2: width, y2: y });
+      }
+    } else {
+      const arrangement = moduleArrangement(sticky, module);
+      columns = arrangement.columns;
+      rows = arrangement.rows;
+      if (rows * columns > 10000) return null;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < columns; c++) cells.push({ x: c * width / columns, y: r * height / rows, w: width / columns, h: height / rows });
+      }
+      for (let c = 1; c < columns; c++) lines.push({ x1: c * width / columns, y1: 0, x2: c * width / columns, y2: height });
+      for (let r = 1; r < rows; r++) lines.push({ x1: 0, y1: r * height / rows, x2: width, y2: r * height / rows });
+    }
+    return { mode: count ? 'count' : 'module', lock: module ? module.lock : 'loose', count: cells.length, rows: rows, columns: columns,
+      moduleWidth: module ? module.width : null, moduleDepth: module ? module.depth : null,
+      cellWidth: cells[0].w, cellDepth: cells[0].h, cells: cells, lines: lines };
   }
 
   function active(model, sticky) {
@@ -398,6 +598,26 @@
   function pack(model) {
     const items = packUnits(model);
     if (!items.length) return;
+    if (model.columnRoles) {
+      const keys = getColumnRoles(model).groupKeys;
+      const level = (members, depth) => {
+        if (depth >= keys.length) { packList(members, PACK_GAP); return; }
+        const blocks = [];
+        groupBy(members, (s) => sFields(model, s)[keys[depth]]).forEach((siblings) => {
+          level(siblings, depth + 1);
+          const box = boundsOf(siblings);
+          offset(siblings, -box.x, -box.y);
+          blocks.push({ x: 0, y: 0, w: box.w, h: box.h, members: siblings });
+        });
+        packList(blocks, PACK_GAP * (1.5 + 0.5 * (keys.length - depth - 1)));
+        blocks.forEach((block) => offset(block.members, block.x, block.y));
+      };
+      level(items, 0);
+      const box = boundsOf(items);
+      offset(items, -(box.x + box.w * 0.5), -(box.y + box.h * 0.5));
+      placeUnits(items);
+      return;
+    }
     const depts = groupBy(items, (s) => (model.deptKey ? sFields(model, s)[model.deptKey] : ''));
     const deptBlocks = [];
     depts.forEach((members) => {
@@ -491,8 +711,9 @@
   // Re-derives the drawn box from the true size about its centre. With a
   // fudge cell, a box whose size changed lands with its corner on the grid.
   function refit(model, s, force) {
-    const cell = model.cell || 0;
-    const size = drawnSize(s, cell);
+    const moduleSize = moduleDrawnSize(model, s);
+    const cell = moduleSize ? 0 : model.cell || 0;
+    const size = moduleSize || drawnSize(s, cell);
     if (!force && Math.abs(size[0] - s.w) < 1e-9 && Math.abs(size[1] - s.h) < 1e-9) return false;
     const cx = s.x + s.w * 0.5;
     const cy = s.y + s.h * 0.5;
@@ -510,9 +731,11 @@
   // Sets the buffer, the fudge cell (0 = true sizes), and the grid step
   // that decides how thick a line collides (omitted: unchanged). Returns
   // the stickies whose drawn size changed.
-  function setParams(model, gap, cell, grid) {
+  function setParams(model, gap, cell, grid, gridActive) {
     model.gap = Math.max(0, Number(gap) || 0);
     if (grid !== undefined) model.grid = grid > 0 ? Number(grid) : 0;
+    if (gridActive !== undefined) model.moduleGridActive = !!gridActive;
+    else if (grid !== undefined) model.moduleGridActive = grid > 0;
     const next = cell > 0 ? cell : 0;
     const force = next > 0 && next !== model.cell;
     model.cell = next;
@@ -538,24 +761,35 @@
     // another pass once that neighbour lands; each pass only lands bodies.
     for (let pass = 0, before = -1; pass < 6 && moved !== before; pass++) {
       before = moved;
-      snapPass(w, cell, cand, (n) => { moved += n; });
+      snapPass(w, model, cell, cand, (n) => { moved += n; });
     }
     if (moved) commit(w);
     return moved;
   }
 
-  function snapPass(w, cell, cand, count) {
+  function snapPass(w, model, cell, cand, count) {
     for (let b = 0; b < w.nb; b++) {
       const box = bodyBox(w, b);
       const x0 = box[0];
       const y0 = box[1];
-      const fx = Math.floor(x0 / cell + 1e-9) * cell;
-      const fy = Math.floor(y0 / cell + 1e-9) * cell;
-      if (Math.abs(fx - x0) < 1e-6 && Math.abs(fy - y0) < 1e-6) continue;
-      if (!legalAt(w, b, 0, 0)) continue;
       cand.length = 0;
-      for (let c = 0; c < 4; c++) cand.push([(c & 1 ? fx + cell : fx) - x0, (c & 2 ? fy + cell : fy) - y0]);
+      const anchors = [];
+      w.members[b].forEach((i) => {
+        const module = rowModule(model, w.list[i]);
+        if (module && module.lock === 'hard') anchors.push({ x: w.x[i], y: w.y[i], sx: module.width, sy: module.depth });
+      });
+      // A rigid group can contain different module sizes and incompatible
+      // offsets. Align its nearest legal member, translating the whole group;
+      // an already aligned member keeps the authored arrangement unchanged.
+      if (!anchors.length) anchors.push({ x: x0, y: y0, sx: cell, sy: cell });
+      anchors.forEach((anchor) => {
+        const fx = Math.floor(anchor.x / anchor.sx + 1e-9) * anchor.sx;
+        const fy = Math.floor(anchor.y / anchor.sy + 1e-9) * anchor.sy;
+        for (let c = 0; c < 4; c++) cand.push([(c & 1 ? fx + anchor.sx : fx) - anchor.x, (c & 2 ? fy + anchor.sy : fy) - anchor.y]);
+      });
       cand.sort((p, q) => Math.hypot(p[0], p[1]) - Math.hypot(q[0], q[1]));
+      if (Math.hypot(cand[0][0], cand[0][1]) < 1e-6) continue;
+      if (!legalAt(w, b, 0, 0)) continue;
       for (let c = 0; c < 4; c++) {
         if (!legalAt(w, b, cand[c][0], cand[c][1])) continue;
         translate(w, b, cand[c][0], cand[c][1]);
@@ -608,8 +842,22 @@
   // stays put; an edge drag keeps the other axis centred. `opts.step` snaps
   // the dragged edge to the grid, `opts.cell` makes the dragged side whole
   // fudge cells, and `opts.wall` ({ x0, y0, x1, y1 }) bounds it.
+  function fittingModuleCount(limit, side, step, gridActive) {
+    if (!(limit > 0)) return 0;
+    if (!gridActive || !(step > 0)) return Math.max(0, Math.floor(limit / side + 1e-9));
+    const gridCells = Math.floor(limit / step + 1e-9);
+    if (gridCells < 1) return 0;
+    let count = Math.ceil((gridCells + 0.5) * step / side);
+    while (count > 0 && Math.max(1, Math.round(count * side / step)) > gridCells) count--;
+    return count;
+  }
+
   function stretchBox(o, edge, px, py, opts) {
-    const op = opts || {};
+    const supplied = opts || {};
+    const module = supplied.module && supplied.module.width > 0 && supplied.module.depth > 0 ? supplied.module : null;
+    // A module controls dimensions before the board's size fudge. Loose lock
+    // scales that complete envelope to the active primary grid afterwards.
+    const op = module ? Object.assign({}, supplied, { cell: 0, step: 0 }) : supplied;
     const area = o.tw * o.th;
     const lo = Math.min(op.min || STRETCH_MIN, Math.sqrt(area));
     const wall = op.wall || null;
@@ -662,7 +910,44 @@
       if (op.cell > 0 && th > hMax + 1e-9) th -= op.cell;
       tw = area / th;
     }
-    const size = op.cell > 0 ? drawnSize({ tw: tw, th: th }, op.cell) : [tw, th];
+    if (module && wall) {
+      const cx = o.x + o.w * 0.5;
+      const cy = o.y + o.h * 0.5;
+      const roomW = hasW ? fx - wall.x0 : hasE ? wall.x1 - fx : 2 * Math.min(cx - wall.x0, wall.x1 - cx);
+      const roomH = hasN ? fy - wall.y0 : hasS ? wall.y1 - fy : 2 * Math.min(cy - wall.y0, wall.y1 - cy);
+      const fits = (width, height) => {
+        const size = moduleSize({ tw: width, th: height }, module, supplied.step, supplied.gridActive);
+        return size[0] <= roomW + 1e-8 && size[1] <= roomH + 1e-8;
+      };
+      if (!fits(tw, th)) {
+        if (module.count) {
+          let best = null;
+          for (let columns = 1; columns <= module.count; columns++) {
+            if (module.count % columns) continue;
+            const rows = module.count / columns;
+            const aspect = columns * module.width / (rows * module.depth);
+            const width = Math.sqrt(area * aspect);
+            const height = area / width;
+            if (!fits(width, height)) continue;
+            const score = Math.abs(Math.log(aspect / (tw / th)));
+            if (!best || score < best.score) best = { tw: width, th: height, score: score };
+          }
+          if (!best) return { x: o.x, y: o.y, w: o.w, h: o.h, tw: o.tw, th: o.th };
+          tw = best.tw; th = best.th;
+        } else {
+          const gridActive = module.lock === 'loose' && supplied.gridActive;
+          const cols = fittingModuleCount(roomW, module.width, supplied.step, gridActive);
+          const rows = fittingModuleCount(roomH, module.depth, supplied.step, gridActive);
+          const minWidth = Math.max(lo, area / (rows * module.depth));
+          const maxWidth = Math.min(area / lo, cols * module.width);
+          if (!cols || !rows || minWidth > maxWidth + 1e-8) return { x: o.x, y: o.y, w: o.w, h: o.h, tw: o.tw, th: o.th };
+          tw = Math.max(minWidth, Math.min(maxWidth, tw));
+          th = area / tw;
+          if (!fits(tw, th)) return { x: o.x, y: o.y, w: o.w, h: o.h, tw: o.tw, th: o.th };
+        }
+      }
+    }
+    const size = module ? moduleSize({ tw: tw, th: th }, module, supplied.step, supplied.gridActive) : op.cell > 0 ? drawnSize({ tw: tw, th: th }, op.cell) : [tw, th];
     const w = size[0];
     const h = size[1];
     let x = hasW ? fx - w : hasE ? fx : o.x + o.w * 0.5 - w * 0.5;
@@ -709,6 +994,7 @@
   function duplicateStickies(model, ids) {
     const list = stickiesById(model, ids);
     if (!list.length || alive(model).length + list.length > MAX_STICKIES) return null;
+    ensureRowIds(model);
     const groups = new Map();
     const out = [];
     const before = model.rows.length;
@@ -716,7 +1002,7 @@
     for (let i = 0; i < list.length; i++) {
       const s = list[i];
       const rowIndex = model.rows.length;
-      model.rows.push({ fields: Object.assign({}, sFields(model, s)), dropped: false });
+      model.rows.push({ id: uid('r'), fields: Object.assign({}, sFields(model, s)), dropped: false });
       after.set(s.rowIndex, rowIndex);
       const c = newSticky(rowIndex, s.x, s.y, s.w, s.h, s.color);
       c.tw = s.tw;
@@ -846,6 +1132,7 @@
 
   // `order`: every old row index, in the new order.
   function reorderRows(model, order) {
+    ensureRowIds(model);
     const to = new Array(order.length);
     for (let i = 0; i < order.length; i++) to[order[i]] = i;
     model.rows = order.map((i) => model.rows[i]);
@@ -867,6 +1154,7 @@
   // own cluster groups nothing). Rows in `skip` (the ones about to move)
   // are left out of the test.
   function rowHierarchy(model, skip) {
+    if (model.columnRoles) return getColumnRoles(model).groupKeys.filter((key) => key !== model.nameKey);
     const rows = [];
     model.rows.forEach((r, i) => {
       if (!r.dropped && !(skip && skip.has(i))) rows.push(r.fields);
@@ -1137,6 +1425,17 @@
   function categoricalOf(model, fieldsList) {
     const n = fieldsList.length;
     const out = [];
+    if (model.columnRoles) {
+      getColumnRoles(model).groupKeys.forEach((key) => {
+        const counts = new Map();
+        fieldsList.forEach((fields) => {
+          const value = cellOf(fields, key);
+          if (value) counts.set(value, (counts.get(value) || 0) + 1);
+        });
+        out.push({ key: key, groups: counts.size, shared: Array.from(counts.values()).filter((count) => count >= 2).length });
+      });
+      return out;
+    }
     if (n < 2) return out;
     const cap = Math.max(CAT_MIN_DISTINCT, Math.floor(n * CAT_SHARE));
     for (let c = 0; c < model.columns.length; c++) {
@@ -4434,6 +4733,51 @@
     return { value: first, mixed: false };
   }
 
+  function applyRowArea(model, rowIndex, area) {
+    const row = model.rows[rowIndex];
+    let sticky = model.stickies.find((s) => s.rowIndex === rowIndex);
+    if (model.areaKey) row.fields[model.areaKey] = String(area);
+    if (!sticky && area > 0) {
+      const box = boundsOf(alive(model));
+      const side = Math.sqrt(area);
+      sticky = newSticky(rowIndex, box.w ? box.x + box.w + gapOf(model) : 0, box.y, side, side, null);
+      refit(model, sticky, false);
+      if (model.frame) placeFresh(model, [sticky], gapOf(model));
+      model.stickies.push(sticky);
+    } else if (sticky) setAreaKeepingAspect(model, sticky, area);
+    return sticky;
+  }
+
+  // Table edits preserve the visible row order. Explicit zero hides a sticky
+  // while keeping its id and its source row available for later activation.
+  function editRowField(model, rowIndex, key, value) {
+    const row = model.rows[rowIndex];
+    if (!row || row.dropped || model.columns.indexOf(key) < 0) return 0;
+    const text = value == null ? '' : String(value);
+    const roles = getColumnRoles(model);
+    let number;
+    if (key === model.areaKey || key === roles.countKey || key === roles.moduleWidthKey || key === roles.moduleDepthKey) {
+      const raw = text.replace(/,/g, '').trim();
+      number = Number(raw);
+      if ((!raw && key === model.areaKey) || !Number.isFinite(number) || number < 0) throw new Error('Use a non-negative number' + (key === model.areaKey ? '; use 0 to hide a row.' : '.'));
+      if (key === roles.countKey && (!Number.isInteger(number) || number > 10000)) throw new Error('Use a whole module count from 0 to 10,000.');
+    }
+    if (row.fields[key] === text) return 0;
+    const sticky = model.stickies.find((s) => s.rowIndex === rowIndex);
+    if (key === model.areaKey && number > 0 && (!sticky || !active(model, sticky)) && alive(model).length >= MAX_STICKIES) {
+      throw new Error('Stay under ' + MAX_STICKIES + ' stickies.');
+    }
+    ensureRowIds(model);
+    const clearances = groupClearances(model, sticky ? [sticky] : []);
+    if (key === model.areaKey) applyRowArea(model, rowIndex, number);
+    else {
+      row.fields[key] = text;
+      if (sticky && (key === roles.countKey || key === roles.moduleWidthKey || key === roles.moduleDepthKey)) refit(model, sticky, false);
+    }
+    respaceGroups(clearances);
+    return 1;
+  }
+
   function setField(model, ids, key, value) {
     const name = ensureColumn(model, key);
     if (!name) return 0;
@@ -4449,7 +4793,12 @@
     }
     const text = value == null ? '' : String(value);
     const changed = list.filter((s) => cellOf(sFields(model, s), name) !== text.trim());
+    const clearances = groupClearances(model, list);
     for (let i = 0; i < list.length; i++) sFields(model, list[i])[name] = text;
+    if (model.columnRoles && [model.columnRoles.countKey, model.columnRoles.moduleWidthKey, model.columnRoles.moduleDepthKey].indexOf(name) >= 0) {
+      list.forEach((s) => refit(model, s, false));
+      respaceGroups(clearances);
+    }
     // A grouping value changed: those rows re-sort into their cluster.
     if (changed.length && name !== model.nameKey) resortRows(model, changed.map((s) => s.rowIndex), name);
     return list.length;
@@ -4533,7 +4882,43 @@
     return '\uFEFF' + lines.join('\r\n') + '\r\n';
   }
 
+  function readBookmarks(value) {
+    if (!Array.isArray(value)) return [];
+    const out = [];
+    const ids = new Set();
+    // Creation is capped in the UI. Imported snapshots are retained even
+    // above that cap, so reopening or renaming never discards saved work.
+    for (let i = 0; i < value.length; i++) {
+      const entry = value[i];
+      try {
+        if (!entry || typeof entry.id !== 'string' || typeof entry.name !== 'string' || !entry.state || !entry.state.board) continue;
+        const board = entry.state.board;
+        if (!Array.isArray(board.columns) || !board.columns.every(key => typeof key === 'string') ||
+          !Array.isArray(board.rows) || !Array.isArray(board.stickies) ||
+          board.rows.some(row => !row || !row.fields || typeof row.fields !== 'object' || Array.isArray(row.fields))) continue;
+        const state = { ...entry.state, board: { ...board } };
+        // Strip catalogues before cloning, including legacy root catalogues.
+        // A cyclic catalogue cannot recursively grow or invalidate a snapshot.
+        delete state.bookmarks;
+        delete state.board.bookmarks;
+        const base = entry.id.trim().slice(0, 128) || 'bookmark-' + (i + 1);
+        let id = base, duplicate = 1;
+        while (ids.has(id)) id = base + '-' + (++duplicate);
+        const copy = JSON.parse(JSON.stringify({
+          id: id,
+          name: entry.name.trim().slice(0, 96) || 'Bookmark ' + (i + 1),
+          createdAt: typeof entry.createdAt === 'string' && Number.isFinite(Date.parse(entry.createdAt)) ? new Date(entry.createdAt).toISOString() : '',
+          state: state,
+        }));
+        ids.add(id);
+        out.push(copy);
+      } catch (err) { /* A malformed optional bookmark does not prevent opening a board. */ }
+    }
+    return out;
+  }
+
   function capture(model) {
+    ensureRowIds(model);
     const f = model.frame;
     return {
       version: 5,
@@ -4552,7 +4937,9 @@
       groupKey: model.groupKey,
       sfKey: model.sfKey,
       qtyKey: model.qtyKey,
-      rows: model.rows.map((row) => ({ fields: Object.assign({}, row.fields), dropped: !!row.dropped })),
+      columnRoles: model.columnRoles ? cleanColumnRoles(model, model.columnRoles) : null,
+      bookmarks: readBookmarks(model.bookmarks),
+      rows: model.rows.map((row) => ({ id: row.id, fields: Object.assign({}, row.fields), dropped: !!row.dropped })),
       stickies: model.stickies.map((s) => writeTextStyle({
         id: s.id,
         rowIndex: s.rowIndex,
@@ -4593,12 +4980,20 @@
     model.groupKey = data.groupKey;
     model.sfKey = data.sfKey;
     model.qtyKey = data.qtyKey;
-    model.rows = data.rows.map((row) => ({ fields: Object.assign({}, row.fields), dropped: !!row.dropped }));
+    model.columnRoles = data.columnRoles ? cleanColumnRoles(model, data.columnRoles) : null;
+    model.bookmarks = readBookmarks(data.bookmarks);
+    if (model.columnRoles) {
+      model.areaKey = model.columnRoles.areaKey;
+      model.deptKey = model.columnRoles.groupKeys[0] || null;
+      model.groupKey = model.columnRoles.groupKeys[1] || null;
+    }
+    model.rows = data.rows.map((row) => ({ id: row.id, fields: Object.assign({}, row.fields), dropped: !!row.dropped }));
     model.gradients = appearance ? appearance.readGradients(data.gradients) : {};
     // Older layouts may carry fields this board no longer reads (cords, pins,
     // corner notes); only geometry, style, and group survive. Before version
     // 4 the drawn box was the true size.
-    const valid = (s) => s && model.rows[s.rowIndex] && finite(s.x) && finite(s.y) && s.w > 0 && s.h > 0;
+    const valid = (s) => s && model.rows[s.rowIndex] && finite(s.x) && finite(s.y) &&
+      ((s.w > 0 && s.h > 0) || (s.tw === 0 && s.th === 0 && s.w >= 0 && s.h >= 0));
     model.stickies = data.stickies.filter(valid).map((s) => Object.assign({
       id: String(s.id),
       rowIndex: s.rowIndex,
@@ -4669,6 +5064,8 @@
     });
     model.lines.forEach((l) => bump(l.id));
     model.texts.forEach((t) => bump(t.id));
+    ensureRowIds(model);
+    model.rows.forEach((row) => { if (/^r[0-9a-z]+$/i.test(row.id)) bump(row.id); });
     seq = maxSeq;
     return model;
   }
@@ -4819,6 +5216,11 @@
       return { model: sheet, view: null, camera: null, summary: summary(0, alive(sheet).length, 0, 0, false) };
     }
     const u = unpackLayout(layout);
+    if (u.model.columnRoles) {
+      const roles = cleanColumnRoles(sheet, u.model.columnRoles);
+      if (!roles.areaKey) roles.areaKey = sheet.areaKey;
+      setColumnRoles(sheet, roles);
+    }
     const hashed = !!(parts.manifest && parts.csvBytes && parts.manifest.csvSha256 === sha256Hex(parts.csvBytes));
     if (hashed || sameRows(sheet, u.model)) {
       return { model: u.model, view: u.view, camera: u.camera, summary: summary(alive(u.model).length, 0, 0, 0, true) };
@@ -4853,6 +5255,8 @@
   // rows are gone (or now have no area) are dropped. Lines, text, the
   // frame, groups, and settings come from the layout.
   function mergeSheet(sheet, lay, gap) {
+    ensureRowIds(lay);
+    ensureRowIds(sheet);
     const cols = sheet.columns;
     const cell = (fields, k) => (k && fields[k] != null ? String(fields[k]) : '');
     const exactKey = (fields) => cols.map((c) => cell(fields, c)).join('\u001f');
@@ -4892,6 +5296,16 @@
         used.add(live[i]);
       }
     }
+    const rowIds = new Set(lay.rows.map((row) => row.id));
+    match.forEach((oldIndex, index) => {
+      if (oldIndex >= 0) sheet.rows[index].id = lay.rows[oldIndex].id;
+      else {
+        // The CSV was parsed before the layout raised the id counter. Keep
+        // its fresh identity unless it collides with a saved row identity.
+        while (rowIds.has(sheet.rows[index].id)) sheet.rows[index].id = uid('r');
+        rowIds.add(sheet.rows[index].id);
+      }
+    });
     const sheetSticky = new Map();
     sheet.stickies.forEach((s) => sheetSticky.set(s.rowIndex, s));
     const toSheet = new Map();
@@ -4932,8 +5346,11 @@
     lay.groupKey = sheet.groupKey;
     lay.sfKey = sheet.sfKey;
     lay.qtyKey = sheet.qtyKey;
+    lay.columnRoles = sheet.columnRoles ? cleanColumnRoles(sheet, sheet.columnRoles) : null;
     lay.rows = sheet.rows;
     lay.stickies = kept;
+    kept.forEach((s) => refit(lay, s, false));
+    fresh.forEach((s) => refit(lay, s, false));
     placeFresh(lay, fresh, gap);
     lay.stickies = kept.concat(fresh);
     return { model: lay, summary: { restored: kept.length, added: fresh.length, removed: removed, resized: resized, exact: false } };
@@ -6395,6 +6812,14 @@
     snapEdge: snapEdge,
     commonField: commonField,
     setField: setField,
+    editRowField: editRowField,
+    getColumnRoles: getColumnRoles,
+    setColumnRoles: setColumnRoles,
+    getColumnTags: getColumnTags,
+    columnTags: getColumnTags,
+    moduleLayout: moduleLayout,
+    moduleForSticky: rowModule,
+    refitSticky: refit,
     nameOf: nameOf,
     setName: setName,
     exportCsv: exportCsv,
@@ -6437,6 +6862,7 @@
     REST_SLACK: REST_SLACK,
     fieldText: fieldText,
     uid: uid,
+    ensureRowIds: ensureRowIds,
     frameTitleFor: frameTitleFor,
     frameAround: frameAround,
     frameMembers: frameMembers,

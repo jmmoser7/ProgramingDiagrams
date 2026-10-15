@@ -13,6 +13,11 @@
 #chrome-row #toolbar .round{width:18px;padding:0}
 #chrome-row .divider{width:1px;height:14px;margin:0 4px;background:var(--border);flex:none}
 #chrome-row .chrome-balance{pointer-events:none}
+#chrome-row #src-data{flex:none;width:auto;min-width:58px;height:18px;padding:0 8px;border-radius:9px;font-size:11px;line-height:18px;color:var(--ink)}
+#chrome-row #src-data[aria-expanded=true]{background:var(--accent);color:#0e1013}
+.board-mode #chrome-row #toolbar .segs{gap:0}
+.board-mode #chrome-row #toolbar .segs .divider{height:12px;margin:0 2px}
+@media(max-width:1100px){#chrome-row{display:flex;gap:8px}#chrome-row #src,#chrome-row #source{flex:0 0 auto;max-width:38vw!important;min-width:142px}#chrome-row #toolbar{flex:0 1 auto;min-width:0;max-width:none!important;overflow-x:auto;scrollbar-width:none}#chrome-row #toolbar::-webkit-scrollbar{display:none}#chrome-row .chrome-balance{display:none}}
 #chrome-row #src-sample{height:18px;padding:0 8px;flex:none}
 #views.iso-views{position:fixed!important;inset:auto!important;transform:none!important;z-index:35;height:24px;padding:0 3px;gap:2px;border-radius:12px;display:flex;align-items:center}
 #views.iso-views button{padding:0 8px;height:18px;font-size:11px;border-radius:9px}
