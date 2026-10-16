@@ -66,7 +66,7 @@ In Board, Pack, and Isometric modes, **Edit data** in the CSV capsule opens **Pr
 
 Tag a count column as **Submodules** to divide each sticky into that exact number of bounded cells. Tag two columns as **Module width** and **Module depth** (feet) for a base module. The lock toggle sits inside each module tag capsule; both dimensions share the same setting. **Hard** keeps every module dimension exact and lets the displayed footprint area adjust. **Loose** also uses exact modules with the global grid off; with it on, the full footprint scales to whole primary-grid increments. The source area remains recorded in the table and exports. Subdivisions follow resizing and are included in Board PNG/SVG exports.
 
-The context menu's **Bundle** capsule offers **All** and **By group**. By group compacts siblings using the tagged group columns, temporarily ignores other groups during that pass, then positions the compact clusters together with collisions restored. Authored rigid groups retain their offsets. Outside labels are controlled by **Leaders** in the board's Text menu.
+The context menu's **Bundle** capsule offers **All** and **By group**. By group gives sibling sets separate, spaced centers using the tagged group columns and their footprints. Each cloud compacts toward its own center while temporarily ignoring other groups; only after compaction do the finished clouds move together with collisions restored. Authored rigid groups retain their offsets. Outside labels are controlled by **Leaders** in the board's Text menu.
 
 **Bookmarks** opens a capsule stack of named complete Board snapshots, including data, column tags, layout, appearance, camera, grid, and selection. The circular **+** at its right saves an arrangement. Click anywhere on a named capsule to restore it with an eased transition; **Delete** remains a separate inset capsule. Use the pencil, double-click the name, or press F2 to rename. Reduced-motion preferences skip the animation. The current bookmark catalog survives a restore and travels with saved layouts/ZIPs. Creation is limited to 30 bookmarks; imported catalogs are retained in full.
 
@@ -185,7 +185,9 @@ The buffer is the clear space kept between stickies, between a sticky and a line
 
 ## Align
 
-Select two or more stickies and a thin strip of eight glyphs appears under the selection: align left, centres, right, top, middles, bottom, then distribute horizontally and vertically. Everything goes to the bounding box of the whole selection. Distribute keeps the first and last in place and spaces the rest evenly; it needs three or more, so its glyphs are dimmed with two. A group aligns as one rigid block. Each press is one undo step.
+Select two or more stickies and a thin glyph strip appears under the selection: align left, centres, right, top, middles, bottom, distribute horizontally and vertically, then **Sort by area, small to large** and **Sort by area, large to small**. Alignment uses the bounding box of the whole selection. Distribute keeps the first and last in place and spaces the rest evenly; it needs three or more, so its glyphs are dimmed with two. A group aligns as one rigid block. Each press is one undo step.
+
+Area sorting arranges a buffered row or column along the selection's longer direction. It ranks source areas, including the summed area of each rigid group, and preserves the order of ties. Grid/module changes to displayed footprints do not change the ranking. It moves the layout without reordering spreadsheet rows. A row/column that cannot fit inside the frame is refused; walls still constrain movement.
 
 Stickies never overlap, so when an align would stack them (align left, then align top), they fan out along the free axis in their existing order, one buffer apart. The aligned edge stays exact.
 

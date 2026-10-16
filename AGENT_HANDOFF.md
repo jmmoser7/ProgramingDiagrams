@@ -3,7 +3,7 @@
 This guide is for a person or coding agent taking over or adapting the repository.
 Read [README.md](README.md) for the product behavior and
 [KEY_MODIFIERS.md](KEY_MODIFIERS.md) for the interaction contract before changing input handling.
-The guides describe the repository as of **15 October 2026**; source and tests take
+The guides describe the repository as of **16 October 2026**; source and tests take
 precedence if the fork changes later.
 
 ## What this project does
@@ -129,6 +129,11 @@ groups while compacting siblings, then restores collisions to place the clusters
 Rigid groups retain their internal offsets. Leaders is inside the Text menu; labels
 and leader paths remain inside the frame, including export layouts.
 
+The alignment widget also sorts by source area in either direction along the
+selection's longer axis. Rigid groups rank by summed member area and remain intact;
+spreadsheet row order is unchanged. Group bundling first assigns spaced independent
+centers, compacts each cloud, and only then gathers the clouds with collisions on.
+
 **Bookmarks.** The Board toolbar opens a named snapshot capsule stack with a circular
 add control at its right. Clicking a capsule restores it; Delete is a separate
 subcapsule. Rename uses the pencil, name double-click, or F2. Snapshots include data,
@@ -173,6 +178,7 @@ node test-mode-state.js
 node test-board-bookmarks.js
 node test-board-transition.js
 node test-board-group-bundle.js
+node test-board-area-sort.js
 node test-pack.js
 node test-iso.js
 node test-iso-physics.js

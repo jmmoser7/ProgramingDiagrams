@@ -4180,7 +4180,8 @@
     const w = buildWorld(model);
     if (!w.n) return 0;
     const target = markTargets(w, ids);
-    const c = targetCentroid(w, target);
+    const c = o.center && Number.isFinite(o.center.x) && Number.isFinite(o.center.y)
+      ? { x: o.center.x, y: o.center.y } : targetCentroid(w, target);
     if (!c) return 0;
     const rank = new Float64Array(w.nb);
     bundleRanks(w, target, c, rank);
@@ -4536,7 +4537,42 @@
   // Slate's align widget: everything goes to the union box of the selection.
   // A group moves as its rigid bounds.
 
-  const ALIGN_MODES = ['left', 'hcenter', 'right', 'top', 'vmiddle', 'bottom', 'hdist', 'vdist'];
+  const ALIGN_MODES = ['left', 'hcenter', 'right', 'top', 'vmiddle', 'bottom', 'hdist', 'vdist', 'areaasc', 'areadesc'];
+
+  // Area is the source footprint, not its grid/module-adjusted display size.
+  // Groups sort as one body by summed member area. Keep ties in spatial order.
+  function areaSortPlan(model, bodies, union, descending) {
+    const horizontal = union.w >= union.h;
+    const pos = horizontal ? 'x' : 'y', cross = horizontal ? 'y' : 'x';
+    const size = horizontal ? 'w' : 'h', crossSize = horizontal ? 'h' : 'w';
+    const gap = gapOf(model), wall = frameInner(model.frame, gap);
+    const length = bodies.reduce((sum, body) => sum + body[size], 0);
+    const breadth = Math.max(...bodies.map(body => body[crossSize]));
+    const minimum = length + gap * (bodies.length - 1);
+    const low = wall ? (horizontal ? wall.x0 : wall.y0) : -Infinity;
+    const high = wall ? (horizontal ? wall.x1 : wall.y1) : Infinity;
+    const crossLow = wall ? (horizontal ? wall.y0 : wall.x0) : -Infinity;
+    const crossHigh = wall ? (horizontal ? wall.y1 : wall.x1) : Infinity;
+    // Refuse a row/column that cannot fit instead of clamping it out of order.
+    if (minimum > high - low + 1e-8 || breadth > crossHigh - crossLow + 1e-8) return [];
+    const span = Math.min(high - low, Math.max(minimum, union[size]));
+    const spacing = Math.max(gap, (span - length) / (bodies.length - 1));
+    let at = Math.max(low, Math.min(high - span, union[pos] + (union[size] - span) * 0.5));
+    const middle = Math.max(crossLow + breadth * 0.5,
+      Math.min(crossHigh - breadth * 0.5, union[cross] + union[crossSize] * 0.5));
+    const ranked = bodies.map((body, index) => ({body, index, area: body.members.reduce((sum, s) => sum + trueArea(s), 0)}));
+    ranked.sort((a, b) => {
+      const delta = a.area - b.area;
+      const areaOrder = Math.abs(delta) > Math.max(1, a.area, b.area) * 1e-10 ? (descending ? -delta : delta) : 0;
+      return areaOrder || a.body[pos] - b.body[pos] || a.body[cross] - b.body[cross] || a.index - b.index;
+    });
+    ranked.forEach(({body}) => {
+      body.dx = horizontal ? at - body.x : middle - body.w * 0.5 - body.x;
+      body.dy = horizontal ? middle - body.h * 0.5 - body.y : at - body.y;
+      at += body[size] + spacing;
+    });
+    return bodies.filter(body => Math.abs(body.dx) > 1e-9 || Math.abs(body.dy) > 1e-9);
+  }
 
   function alignPlan(model, ids, mode) {
     const bodies = bodyBoxes(stickiesById(model, expandToGroups(model, ids)));
@@ -4547,6 +4583,7 @@
       b.dx = 0;
       b.dy = 0;
     });
+    if (mode === 'areaasc' || mode === 'areadesc') return areaSortPlan(model, bodies, u, mode === 'areadesc');
     if (mode === 'left') bodies.forEach((b) => { b.dx = u.x - b.x; });
     else if (mode === 'hcenter') bodies.forEach((b) => { b.dx = u.x + u.w * 0.5 - (b.x + b.w * 0.5); });
     else if (mode === 'right') bodies.forEach((b) => { b.dx = u.x + u.w - (b.x + b.w); });

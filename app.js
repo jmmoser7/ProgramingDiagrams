@@ -75,6 +75,9 @@
     null,
     { mode: 'hdist', label: 'Distribute horizontally', line: 'M1.5 1v12M12.5 1v12', bars: 'M5.5 3.5h3v7h-3z' },
     { mode: 'vdist', label: 'Distribute vertically', line: 'M1 1.5h12M1 12.5h12', bars: 'M3.5 5.5h7v3h-7z' },
+    null,
+    { mode: 'areaasc', label: 'Sort by area, small to large', line: 'M1 12.5h12', bars: 'M2 9h2v2H2zM6 6h2v5H6zM10 2h2v9h-2z' },
+    { mode: 'areadesc', label: 'Sort by area, large to small', line: 'M1 12.5h12', bars: 'M2 2h2v9H2zM6 6h2v5H6zM10 9h2v2h-2z' },
   ];
 
   // Text is measured once at REF px and drawn through a scaling transform, so
@@ -4188,7 +4191,7 @@
 
   // ----------------------------------------------------------------- align
 
-  // Slate's align strip: one thin capsule of eight screen-sized glyphs,
+  // Slate's align strip: one thin capsule of screen-sized glyphs,
   // centred under the selection whenever it holds two or more bodies.
   function buildAlign() {
     for (let i = 0; i < ALIGN.length; i++) {
@@ -4208,6 +4211,9 @@
         event.preventDefault();
         event.stopPropagation();
         if (event.button === 0 && !b.disabled) doAlign(a.mode);
+      });
+      b.addEventListener('click', event => {
+        if (event.detail === 0 && !b.disabled) doAlign(a.mode);
       });
       b.addEventListener('pointerenter', () => showTip(b, a.label));
       b.addEventListener('pointerleave', hideTip);
@@ -4294,8 +4300,12 @@
 
   // Groups align as their rigid bounds; one press is one undo step.
   function doAlign(mode) {
+    if (dataDashboard?.commitActive() === false) return;
     const ids = expanded();
-    if (!engine.alignPlan(model, ids, mode).length) return;
+    if (!engine.alignPlan(model, ids, mode).length) {
+      if (mode === 'areaasc' || mode === 'areadesc') toast('Already sorted, or more room is needed inside the frame.');
+      return;
+    }
     closeData();
     checkpoint();
     engine.alignSelection(model, ids, mode);
