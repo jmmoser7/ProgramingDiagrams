@@ -7,6 +7,10 @@ For another person or coding agent taking over a fork, start with
 [AGENT_HANDOFF.md](AGENT_HANDOFF.md). The shared interaction contract and current
 mode differences are documented in [KEY_MODIFIERS.md](KEY_MODIFIERS.md).
 
+## True 3D modeling lab
+
+Open [modeling-lab.html](modeling-lab.html) over HTTP for the isolated WebGL XYZ modeler: Box/Cube, Line/Polyline, Plane/SrfPt, CPlanes, snapping, component selection, Gumball transforms, blocks and JSON documents. See [launch instructions and limitations](modeling-lab/README.md) and [cloud verification](modeling-lab/VERIFICATION.md). Its mesh/bilinear geometry and state are separate from the existing interaction lab and Program Board. Build it separately with `npm --prefix modeling-lab run build`.
+
 ## Drag feel bench
 
 Open [drag-feel.html](drag-feel.html) for a focused four-block bench using the board's solid collision engine. Tune the block buffer, smoothness, friction, inertia, magnetic grid and neighbor snapping, contact response, and the resistance and release of pressure climbing while dragging. Presets and an A/B comparison help find a firmer, tactile feel. Settings save independently on this device and can be imported or exported for comparison; the bench does not change the program board's settings or data.

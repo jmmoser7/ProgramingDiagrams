@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Modeling Lab · Program Board</title>
+    <link rel="stylesheet" href="modeling-lab/style.css" />
+  </head>
+  <body>
+    <header>
+      <a href="index.html" class="brand">P<span> / </span>B</a>
+      <div>
+        <strong>Modeling lab</strong><small>Spatial interaction / 01</small>
+      </div>
+      <nav>
+        <button id="sample">Sample scene</button
+        ><button id="new">Empty document</button
+        ><button id="save">Save JSON</button><button id="load">Open JSON</button
+        ><input id="file" type="file" accept=".json,application/json" hidden />
+      </nav>
+      <button id="help">Guide ↗</button>
+    </header>
+    <main>
+      <aside class="tools">
+        <div class="eyebrow">CREATE</div>
+        <div id="commands"></div>
+        <div class="eyebrow">DOCUMENT</div>
+        <div class="row">
+          <button id="undo" title="Ctrl+Z">↶ Undo</button
+          ><button id="redo" title="Ctrl+Y">↷ Redo</button>
+        </div>
+        <div class="row">
+          <button id="group">Group</button><button id="ungroup">Ungroup</button>
+        </div>
+        <button id="block">Block from selection</button
+        ><label
+          >Definition<select id="definitions">
+            <option value="">No blocks</option>
+          </select></label
+        ><button id="insert">Insert instance</button>
+        <div class="tree-head">
+          <div class="eyebrow">OBJECTS <span id="count"></span></div>
+          <button id="delete" title="Delete selected">−</button>
+        </div>
+        <div id="tree"></div>
+        <p class="subtle">
+          Independent document.<br />Program Board stays separate.
+        </p>
+      </aside>
+      <section id="workspace">
+        <div class="viewbar">
+          <div class="pill">
+            <select id="view">
+              <option>Perspective</option>
+              <option>Top</option>
+              <option>Front</option>
+              <option>Right</option></select
+            ><span id="projection">Perspective</span>
+          </div>
+          <div class="pill">
+            <span>CPlane</span
+            ><select id="cplane">
+              <option>XY</option>
+              <option>XZ</option>
+              <option>YZ</option></select
+            ><label
+              >Elev <input id="elevation" type="number" value="0" step="1"
+            /></label>
+          </div>
+          <div class="pill">
+            <button id="extents" title="ZE / Ctrl+Shift+E">ZE</button
+            ><button id="selected" title="ZS">ZS</button
+            ><button id="target">Set target</button>
+          </div>
+        </div>
+        <div id="viewport" tabindex="0" aria-label="3D modeling viewport">
+          <svg id="gumball"></svg>
+          <div id="marquee" hidden></div>
+          <div id="marker" hidden><i></i><span></span></div>
+          <svg id="guides"></svg>
+          <div id="view-label">PERSPECTIVE</div>
+          <div id="coordinates">World 0, 0, 0</div>
+          <div id="error" hidden></div>
+          <div id="recent" hidden></div>
+          <div class="legend">
+            <span class="x">X</span><span class="y">Y</span
+            ><span class="z">Z</span> WORLD · model units
+          </div>
+        </div>
+        <div class="precision">
+          <label><input id="snap" type="checkbox" checked /> Osnap</label
+          ><label><input id="grid" type="checkbox" /> Grid</label
+          ><input
+            id="grid-size"
+            type="number"
+            value="1"
+            min="0.000001"
+            step="1"
+            title="Grid spacing"
+          /><label><input id="ortho" type="checkbox" /> Ortho</label
+          ><select id="angle">
+            <option>45</option>
+            <option>90</option>
+            <option>30</option>
+            <option>15</option></select
+          ><label><input id="smart" type="checkbox" checked /> SmartTrack</label
+          ><label><input id="project" type="checkbox" /> Project</label
+          ><button id="direction">Tab lock: off</button>
+        </div>
+      </section>
+      <aside class="inspector">
+        <div class="eyebrow">PROPERTIES</div>
+        <h2 id="selection-title">Document defaults</h2>
+        <label
+          >Apply to<select id="scope">
+            <option value="selection">Selected objects</option>
+            <option value="groups">Selected groups</option>
+            <option value="document">Document defaults</option>
+          </select></label
+        ><label>Name<input id="name" placeholder="Mixed / document" /></label
+        ><label>Color <input id="color" type="color" value="#c5d0d7" /></label
+        ><label
+          >Opacity
+          <input
+            id="opacity"
+            type="number"
+            min="0.05"
+            max="1"
+            step="0.05"
+            value="1" /></label
+        ><button id="inherit">Clear selected style overrides</button>
+        <p class="subtle" id="property-source"></p>
+        <div class="divider"></div>
+        <div class="eyebrow">SELECTION</div>
+        <label
+          >Type filter<select id="filter">
+            <option value="all">All geometry</option>
+            <option value="curves">Lines / polylines</option>
+            <option value="surfaces">Solids / surfaces / blocks</option>
+            <option value="components">Components</option>
+          </select></label
+        ><label
+          >Ctrl+Shift target<select id="component">
+            <option value="edge">Edges / segments</option>
+            <option value="vertex">Vertices</option>
+            <option value="face">Faces</option>
+          </select></label
+        >
+        <div class="divider"></div>
+        <div class="eyebrow">GUMBALL / WORLD AXES</div>
+        <div id="transform-modes" class="row">
+          <button data-mode="move" class="active">Move</button
+          ><button data-mode="rotate">Rotate</button
+          ><button data-mode="scale">Scale</button>
+        </div>
+        <label
+          >Axis<select id="axis">
+            <option>X</option>
+            <option>Y</option>
+            <option>Z</option>
+            <option>XYZ</option>
+          </select></label
+        ><label id="value-label"
+          >Distance / degrees / factor<input
+            id="transform-value"
+            type="number"
+            value="1"
+            step="0.1" /></label
+        ><button id="apply-transform">Apply transform</button>
+        <p class="subtle" id="pivot">Pivot: selection bounds center</p>
+        <div class="divider"></div>
+        <label
+          >Interaction preset<select id="preset">
+            <option value="accepted">Accepted aqua / native cursor</option>
+            <option value="discovery">Discovery hover / pointer</option>
+          </select></label
+        >
+        <p class="subtle">
+          Mesh solids and bilinear surfaces.<br />No NURBS kernel.
+        </p>
+      </aside>
+    </main>
+    <footer>
+      <div id="prompt"><b>Ready</b> Select geometry or start a command.</div>
+      <div class="command-row">
+        <span>›</span
+        ><input
+          id="command"
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="Command or coordinates"
+          placeholder="Command or coordinates · x,y,z / wx,y,z / @dx,dy,dz"
+        /><button id="accept">Enter ↵</button><button id="cancel">Esc</button>
+      </div>
+      <div id="status">WebGL · starting</div>
+    </footer>
+    <dialog id="guide">
+      <button id="close-help">Close ×</button>
+      <h1>A small, real 3D workbench.</h1>
+      <p>
+        Pick a creation command. Click CPlane points or type coordinates in the
+        command bar. XYZ is CPlane space; prefix <b>w</b> for world or
+        <b>@</b> for relative. Ctrl+click starts Elevator; type the
+        CPlane-normal distance or pick the elevated point. Elev sets the CPlane
+        offset.
+      </p>
+      <p>
+        <b>Box:</b> two base corners, then height. Shift squares the base.
+        <b>Cube:</b> equal edges from two corners. <b>Polyline:</b> vertices,
+        Enter finish; Undo removes the last; Close after three.
+        <b>SrfPt:</b> three corners + Enter, or four corners. Snaps and numeric
+        input allow noncoplanar corners.
+      </p>
+      <p>
+        <b>Navigation:</b> RMB orbits Perspective; Shift+RMB pans. RMB pans
+        parallel views. Ctrl+RMB zooms vertically. Ctrl+Shift+RMB orbits about
+        geometry under the press, or the existing target on a miss. Wheel zooms
+        at the cursor; Ctrl+wheel uses center. ZE fits all; ZS fits selected;
+        Set target explicitly picks a new camera target. Middle click opens
+        recent commands.
+      </p>
+      <p>
+        <b>Selection:</b> click replaces; Shift adds; Ctrl removes. Drag empty
+        space left → right to enclose; right → left to cross. Ctrl+Shift picks
+        components of the visible target type. Locked/hidden/filtered objects
+        are excluded. Group selection carries unlocked visible members.
+      </p>
+      <p>
+        <b>Transform:</b> select objects/components; drag colored Gumball tips
+        or rotation rings. Click a handle then type its numeric value in the
+        inspector. Move/rotate/scale buttons switch modes. XYZ applies uniform
+        scale or equal XYZ movement. Escape rolls back a live transform. Camera
+        navigation never enters geometry history.
+      </p>
+      <p>
+        <b>Precision:</b> pixel-based End, Mid, Center and true 3D Intersection
+        snaps; Project is explicit. Shift inverts Ortho, default 45°. Tab locks
+        the current 3D direction and persists through vertices; Tab again
+        releases. SmartTrack captures a snapped point after 450 ms and offers
+        CPlane-parallel guides; last four references survive picks. No curved
+        primitives: tangent/curve snaps are unavailable.
+      </p>
+      <p>
+        <b>Blocks:</b> select whole geometry → Block; instances reference the
+        same immutable definition. Insert uses a point. Nested blocks and
+        definition editing are outside this first version. Save JSON downloads a
+        versioned document; Open validates before replacing. New is undoable. No
+        automatic external writes.
+      </p>
+      <p>
+        Surfaces use a triangle or tessellated bilinear patch, boxes use polygon
+        meshes. Component edits can warp them; no Rhino NURBS, booleans,
+        topology healing, native .3dm round-trip, occluded-selection menu or
+        topology loops.
+      </p>
+      <a href="modeling-lab/README.md">Technical notes and verification</a>
+    </dialog>
+    <script src="interaction-lab/accepted-preferences.js"></script>
+    <script type="module" src="modeling-lab/app.js"></script>
+  </body>
+</html>
