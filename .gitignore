@@ -1,6 +1,7 @@
 # Build output, local dependencies, and private starter data.
 dist/
 *.zip
+*.pboard
 node_modules/
 .local/
 sample.csv

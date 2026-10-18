@@ -451,9 +451,9 @@
     if (dataDashboard?.close() === false) { toast('Correct the highlighted table value before opening another program.'); return; }
     const name = file.name || 'program.csv';
     try {
-      if (/\.(zip|json)$/i.test(name)) {
+      if (/\.(pboard|zip|json)$/i.test(name)) {
         let saved;
-        if (/\.zip$/i.test(name)) {
+        if (/\.(pboard|zip)$/i.test(name)) {
           const files = await Engine.unzip(await file.arrayBuffer(), 'a pack board');
           const key = Object.keys(files).find(n => /\.pack\.json$/i.test(n));
           if (key) saved = JSON.parse(new TextDecoder().decode(files[key]));

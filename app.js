@@ -5311,13 +5311,13 @@
 
   function fileKind(file) {
     const lower = file.name.toLowerCase();
-    if (lower.endsWith('.zip')) return 'zip';
+    if (lower.endsWith('.pboard') || lower.endsWith('.zip')) return 'zip';
     if (lower.endsWith('.json')) return 'layout';
     if (lower.endsWith('.xlsx') || lower.endsWith('.xlsm')) return 'xlsx';
     return 'csv';
   }
 
-  // One drop or one pick: a saved .zip; a spreadsheet and a .layout.json
+  // One drop or one pick: a saved .pboard or .zip; a spreadsheet and a .layout.json
   // together (the same as the zip); a spreadsheet alone (a fresh packed
   // board); or a layout alone (it carries its own rows).
   async function loadFiles(list) {

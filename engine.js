@@ -5162,7 +5162,7 @@
   const SAVE_KIND = 'program-board-save';
 
   function baseName(fileName) {
-    return String(fileName || 'program').replace(/(\.layout)?\.(csv|xlsx|xlsm|json|zip)$/i, '') || 'program';
+    return String(fileName || 'program').replace(/(\.layout)?\.(csv|xlsx|xlsm|json|zip|pboard)$/i, '') || 'program';
   }
 
   // Resolves to { name, bytes, layoutText }. Areas are synced into the rows

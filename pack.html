@@ -411,13 +411,13 @@
     .stepper { display: inline-flex; align-items: center; gap: 8px; }
     .stepper .val { min-width: 75px; text-align: center; }
   </style>
-  <link rel="stylesheet" href="chrome.css?v=20261016-area-clouds-3">
-  <link rel="stylesheet" href="board-data-ui.css?v=20261016-area-clouds-3">
+  <link rel="stylesheet" href="chrome.css?v=20261016-pboard-test-1">
+  <link rel="stylesheet" href="board-data-ui.css?v=20261016-pboard-test-1">
 </head>
 <body>
   <canvas id="board" aria-label="Packed spaces. Drag cards beside each other to rearrange. Right-click for controls."></canvas>
   <div id="src" class="cap row">
-    <button id="src-open" class="btn file" type="button" title="Open a spreadsheet (.csv or .xlsx), or a saved Pack ZIP or JSON. You can also drop it here.">
+    <button id="src-open" class="btn file" type="button" title="Open a spreadsheet (.csv or .xlsx), a dashboard project (.pboard or .zip), or saved Pack JSON. You can also drop it here.">
       <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5h4l2.5 2.5v6.5h-6.5z M7 1.5v2.5h2.5" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>
       <span id="src-name">No file</span>
     </button>
@@ -427,8 +427,8 @@
     <button hidden id="src-sample" class="btn sub" type="button" title="Reload the sample program">Sample</button>
   </div>
   <div id="empty" hidden>
-    <span class="drop-title">Drop a spreadsheet or saved Pack board here</span>
-    <span class="drop-sub">The same spreadsheet as the program board. Each row becomes a tile whose area is its square feet.</span>
+    <span class="drop-title">Drop a spreadsheet or dashboard project here</span>
+    <span class="drop-sub">Open .csv or .xlsx, a dashboard project (.pboard or .zip), or saved Pack JSON. Each row becomes a tile whose area is its square feet.</span>
     <button id="empty-browse" class="btn" type="button">Browse</button>
   </div>
   <div id="toolbar" class="cap bar">
@@ -464,16 +464,16 @@
   <div id="slide-tip"></div>
   <div id="toast" class="cap" hidden></div>
   <input id="name-input" class="name-input" type="text" autocomplete="off" spellcheck="false" aria-label="Space name" hidden>
-  <input id="file" type="file" accept=".csv,.xlsx,.xlsm,.zip,.json,text/csv" hidden>
-  <script src="appearance.js?v=20261016-area-clouds-3"></script>
-  <script src="engine.js?v=20261016-area-clouds-3"></script>
-  <script src="leaders.js?v=20261016-area-clouds-3"></script>
-  <script src="mode-state.js?v=20261016-area-clouds-3"></script>
-  <script src="pack-engine.js?v=20261016-area-clouds-3"></script>
-  <script src="program-seed.js?v=20261016-area-clouds-3"></script>
-  <script src="chrome.js?v=20261016-area-clouds-3"></script>
-  <script src="board-data-ui.js?v=20261016-area-clouds-3"></script>
-  <script src="pack.js?v=20261016-area-clouds-3"></script>
-  <script src="display-mode.js?v=20261016-area-clouds-3"></script>
+  <input id="file" type="file" accept=".csv,.xlsx,.xlsm,.pboard,.zip,.json,text/csv" hidden>
+  <script src="appearance.js?v=20261016-pboard-test-1"></script>
+  <script src="engine.js?v=20261016-pboard-test-1"></script>
+  <script src="leaders.js?v=20261016-pboard-test-1"></script>
+  <script src="mode-state.js?v=20261016-pboard-test-1"></script>
+  <script src="pack-engine.js?v=20261016-pboard-test-1"></script>
+  <script src="program-seed.js?v=20261016-pboard-test-1"></script>
+  <script src="chrome.js?v=20261016-pboard-test-1"></script>
+  <script src="board-data-ui.js?v=20261016-pboard-test-1"></script>
+  <script src="pack.js?v=20261016-pboard-test-1"></script>
+  <script src="display-mode.js?v=20261016-pboard-test-1"></script>
 </body>
 </html>

@@ -538,7 +538,7 @@
     try {
       if (await flushEdits() === false || dataDashboard?.close() === false) throw new Error('Correct the highlighted table value before opening another program.');
       const before = snapshot(); let opened, isoCamera = null;
-      if (/\.zip$/i.test(file.name)) {
+      if (/\.(pboard|zip)$/i.test(file.name)) {
         const parts = await Engine.readSaveZip(await file.arrayBuffer()); opened = Engine.openSave(parts);
         const layout = typeof parts.layout === 'string' ? JSON.parse(parts.layout) : parts.layout; isoCamera = layout?.view?.isoCamera;
       } else if (/\.json$/i.test(file.name)) {

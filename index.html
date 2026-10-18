@@ -785,13 +785,13 @@
       pointer-events: none;
     }
   </style>
-  <link rel="stylesheet" href="chrome.css?v=20261016-area-clouds-3">
-  <link rel="stylesheet" href="board-data-ui.css?v=20261016-area-clouds-3">
+  <link rel="stylesheet" href="chrome.css?v=20261016-pboard-test-1">
+  <link rel="stylesheet" href="board-data-ui.css?v=20261016-pboard-test-1">
 </head>
 <body class="board-mode">
   <canvas id="board"></canvas>
   <div id="src" class="cap row">
-    <button id="src-open" class="btn file" type="button" title="Open a spreadsheet (.csv, .xlsx), a saved .zip, or a spreadsheet and its .layout.json together, or drop them on the board. The spreadsheet itself is never changed.">
+    <button id="src-open" class="btn file" type="button" title="Open a spreadsheet (.csv, .xlsx), a dashboard project (.pboard or .zip), or a spreadsheet and its .layout.json together, or drop them on the board. The spreadsheet itself is never changed.">
       <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5h4l2.5 2.5v6.5h-6.5z M7 1.5v2.5h2.5" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>
       <span id="src-name"></span>
     </button>
@@ -800,11 +800,11 @@
     <span id="src-div" class="divider"></span>
     <button id="src-sample" class="btn sub" type="button" title="Reload the sample program">Sample</button>
   </div>
-  <div id="empty" role="button" tabindex="0" aria-label="Drop CSV or ZIP bundle here, or browse for a file" hidden>
+  <div id="empty" role="button" tabindex="0" aria-label="Drop a spreadsheet or dashboard project here, or browse for a file" hidden>
     <svg class="drop-icon" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 18V6.5M9.5 11 14 6.5 18.5 11M6 17.5v3.5h16v-3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <span class="drop-title">Drop CSV or ZIP bundle here</span>
-    <span class="drop-sub">.csv or .xlsx, a saved .zip, or a .csv with its .layout.json</span>
-    <button id="empty-browse" class="btn" type="button" title="Pick a spreadsheet, a saved .zip, or a spreadsheet and its .layout.json together">Browse</button>
+    <span class="drop-title">Drop a spreadsheet or dashboard project here</span>
+    <span class="drop-sub">.csv or .xlsx, a saved .pboard or .zip, or a .csv with its .layout.json</span>
+    <button id="empty-browse" class="btn" type="button" title="Pick a spreadsheet, a dashboard project (.pboard or .zip), or a spreadsheet and its .layout.json together">Browse</button>
   </div>
   <div id="toolbar" class="cap bar">
     <div id="tools" class="segs" role="radiogroup" aria-label="Tool">
@@ -861,20 +861,20 @@
   <textarea id="name-input" class="name-input" autocomplete="off" spellcheck="false" rows="1" placeholder="Name" aria-label="Sticky name" hidden></textarea>
   <input id="sf-input" class="sf-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="Area in square feet" hidden>
   <span id="sf-unit" class="sf-unit" aria-hidden="true" hidden>sf</span>
-  <input id="file" type="file" accept=".zip,.csv,.xlsx,.xlsm,.json,application/zip,text/csv,application/json" multiple hidden>
+  <input id="file" type="file" accept=".pboard,.zip,.csv,.xlsx,.xlsm,.json,application/zip,text/csv,application/json" multiple hidden>
   <script id="seed" type="text/plain"></script>
-  <script src="blob.js?v=20261016-area-clouds-3"></script>
-  <script src="appearance.js?v=20261016-area-clouds-3"></script>
-  <script src="engine.js?v=20261016-area-clouds-3"></script>
-  <script src="leaders.js?v=20261016-area-clouds-3"></script>
-  <script src="mode-state.js?v=20261016-area-clouds-3"></script>
-  <script src="program-seed.js?v=20261016-area-clouds-3"></script>
-  <script src="chrome.js?v=20261016-area-clouds-3"></script>
-  <script src="board-group-bundle.js?v=20261016-area-clouds-3"></script>
-  <script src="board-transition.js?v=20261016-area-clouds-3"></script>
-  <script src="board-data-ui.js?v=20261016-area-clouds-3"></script>
-  <script src="board-bookmarks.js?v=20261016-area-clouds-3"></script>
-  <script src="app.js?v=20261016-area-clouds-3"></script>
-  <script src="display-mode.js?v=20261016-area-clouds-3"></script>
+  <script src="blob.js?v=20261016-pboard-test-1"></script>
+  <script src="appearance.js?v=20261016-pboard-test-1"></script>
+  <script src="engine.js?v=20261016-pboard-test-1"></script>
+  <script src="leaders.js?v=20261016-pboard-test-1"></script>
+  <script src="mode-state.js?v=20261016-pboard-test-1"></script>
+  <script src="program-seed.js?v=20261016-pboard-test-1"></script>
+  <script src="chrome.js?v=20261016-pboard-test-1"></script>
+  <script src="board-group-bundle.js?v=20261016-pboard-test-1"></script>
+  <script src="board-transition.js?v=20261016-pboard-test-1"></script>
+  <script src="board-data-ui.js?v=20261016-pboard-test-1"></script>
+  <script src="board-bookmarks.js?v=20261016-pboard-test-1"></script>
+  <script src="app.js?v=20261016-pboard-test-1"></script>
+  <script src="display-mode.js?v=20261016-pboard-test-1"></script>
 </body>
 </html>
